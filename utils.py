@@ -7,6 +7,8 @@ import logging
 import configparser
 
 
+REQUEST_TIMEOUT = (10, 60)
+
 
 def load_and_unzip_data():
     url = "https://www.kaggle.com/account/login?ReturnUrl=/c/dstl-satellite-imagery-feature-detection/download/"
@@ -47,7 +49,9 @@ def download_url(url):
 
 
     # Login to Kaggle and retrieve the data.
-    r = requests.post(url, data=kaggle_info, stream=True)
+    r = requests.post(url, data=kaggle_info, stream=True,
+                      timeout=REQUEST_TIMEOUT)
+    r.raise_for_status()
 
     logging.info("Load file %s\n" % filename)
     with open(filename, "wb") as f:
