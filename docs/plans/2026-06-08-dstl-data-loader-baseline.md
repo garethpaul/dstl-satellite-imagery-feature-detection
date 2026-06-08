@@ -29,9 +29,12 @@ The repository contains a small Python helper for downloading Kaggle DSTL compet
 
 Files: `utils.py`, `tests/testutils.py`
 
-Approach: Add `DEFAULT_TIMEOUT`, injectable sessions and credentials, explicit `raise_for_status`, output directory handling, and credential validation.
+Approach: Add `DEFAULT_TIMEOUT`, injectable sessions and credentials, explicit
+`raise_for_status`, chunked response writes, response closing, output directory
+handling, and credential validation.
 
-Verification: Offline tests assert the session receives the timeout, credentials, stream flag, and output path.
+Verification: Offline tests assert the session receives the timeout,
+credentials, stream flag, chunk size, response close, and output path.
 
 ### U2: Safe unzip
 
