@@ -48,3 +48,6 @@ integration checks.
 - Large notebooks without documented inputs and outputs
 - Live-download tests as the default test path
 - Model claims without reproducible training or evaluation notes
+
+This list is a roadmap guardrail, not a permanent rule.
+Strong user demand and strong technical rationale can change it.
