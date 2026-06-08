@@ -72,4 +72,4 @@ Keep changes small and tied to the project that is already present in this repos
 
 Prior README summary:
 
-> dstl-satellite-imagery-feature-detection <!-- README-OVERVIEW-IMAGE --> dstl-satellite-imagery-feature-detection https://www.kaggle.com/c/dstl-satellite-imagery-feature-detection
+> dstl-satellite-imagery-feature-detection dstl-satellite-imagery-feature-detection https://www.kaggle.com/c/dstl-satellite-imagery-feature-detection
