@@ -39,7 +39,6 @@ Canonical security policy and reporting:
 
 - [`SECURITY.md`](SECURITY.md)
 
-
 Kaggle credentials must stay in local configuration and out of git. Downloaded
 competition data may be large and license-constrained, so it should not be
 committed.
