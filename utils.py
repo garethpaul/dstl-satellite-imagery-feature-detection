@@ -1,9 +1,8 @@
 import configparser
 import logging
 import os
-import shutil
 import zipfile
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import requests
 
@@ -21,6 +20,7 @@ DATA_FILES = [
     "train_wkt_v4.csv.zip",
 ]
 DEFAULT_TIMEOUT = (10, 60)
+CHUNK_SIZE = 1024 * 1024
 
 
 class KaggleCredentialsError(RuntimeError):
@@ -74,7 +74,9 @@ def load_and_unzip_data(output_dir=None, credentials_file=None, timeout=DEFAULT_
 
 
 def filename_from_url(url):
-    filename = os.path.basename(urlparse(url).path)
+    parsed_url = urlparse(url)
+    return_url = parse_qs(parsed_url.query).get("ReturnUrl", [""])[0]
+    filename = os.path.basename(return_url or parsed_url.path)
     if not filename:
         raise ValueError("Download URL must end with a filename.")
     return filename
@@ -102,11 +104,18 @@ def download_url(
     client = session or requests
 
     response = client.post(url, data=credentials, stream=True, timeout=timeout)
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
 
-    logging.info("Load file %s", filename)
-    with open(filepath, "wb") as handle:
-        shutil.copyfileobj(response.raw, handle)
+        logging.info("Load file %s", filename)
+        with open(filepath, "wb") as handle:
+            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                if chunk:
+                    handle.write(chunk)
+    finally:
+        close = getattr(response, "close", None)
+        if close:
+            close()
 
     logging.info("FINISH file %s", filename)
     logging.info("File size: %d kb", os.path.getsize(filepath))

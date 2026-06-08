@@ -1,4 +1,3 @@
-import io
 import os
 import tempfile
 import unittest
@@ -8,12 +7,21 @@ import utils
 
 
 class FakeResponse:
-    def __init__(self, body=b"payload"):
-        self.raw = io.BytesIO(body)
+    def __init__(self, chunks=None):
+        self.chunks = chunks or [b"payload"]
         self.status_checked = False
+        self.closed = False
+        self.chunk_size = None
 
     def raise_for_status(self):
         self.status_checked = True
+
+    def iter_content(self, chunk_size):
+        self.chunk_size = chunk_size
+        return iter(self.chunks)
+
+    def close(self):
+        self.closed = True
 
 
 class FakeSession:
@@ -34,8 +42,14 @@ class FakeSession:
 
 
 class DatasetLoadTest(unittest.TestCase):
+    def test_filename_from_legacy_kaggle_login_url(self):
+        self.assertEqual(
+            "sample_submission.csv.zip",
+            utils.filename_from_url(utils.BASE_DOWNLOAD_URL + "sample_submission.csv.zip"),
+        )
+
     def test_download_uses_timeout_credentials_and_output_dir(self):
-        response = FakeResponse(b"abc123")
+        response = FakeResponse([b"abc", b"", b"123"])
         session = FakeSession(response)
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -52,6 +66,8 @@ class DatasetLoadTest(unittest.TestCase):
                 self.assertEqual(b"abc123", handle.read())
 
         self.assertTrue(response.status_checked)
+        self.assertTrue(response.closed)
+        self.assertEqual(utils.CHUNK_SIZE, response.chunk_size)
         self.assertEqual((3, 9), session.calls[0]["timeout"])
         self.assertTrue(session.calls[0]["stream"])
         self.assertEqual({"UserName": "user", "Password": "pass"}, session.calls[0]["data"])

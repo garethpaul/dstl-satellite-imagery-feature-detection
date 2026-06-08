@@ -25,6 +25,13 @@ done
 python3 -m py_compile "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"
 python3 -m unittest discover -s "$ROOT_DIR/tests" -p "test*.py"
 
+if ! grep -Fq "iter_content" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "CHUNK_SIZE" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "close()" "$ROOT_DIR/utils.py"; then
+  printf '%s\n' "Downloader must stream chunks and close HTTP responses." >&2
+  exit 1
+fi
+
 python3 - "$ROOT_DIR/utils.py" <<'PY'
 import ast
 import pathlib
@@ -39,6 +46,10 @@ for node in ast.walk(tree):
     if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
         continue
     if node.func.attr not in methods:
+        continue
+    if not isinstance(node.func.value, ast.Name):
+        continue
+    if node.func.value.id not in {"requests", "client", "session"}:
         continue
     if not any(keyword.arg == "timeout" for keyword in node.keywords):
         violations.append((node.lineno, node.func.attr))
