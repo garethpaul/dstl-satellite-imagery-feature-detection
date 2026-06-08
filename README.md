@@ -1,5 +1,8 @@
 # dstl-satellite-imagery-feature-detection
 
+<!-- README-OVERVIEW-IMAGE -->
+![Project overview](docs/readme-overview.svg)
+
 ## Overview
 
 `garethpaul/dstl-satellite-imagery-feature-detection` is a public sample, documentation, or utility project. dstl-satellite-imagery-feature-detection https://www.kaggle.com/c/dstl-satellite-imagery-feature-detection
@@ -70,4 +73,3 @@ Keep changes small and tied to the project that is already present in this repos
 Prior README summary:
 
 > dstl-satellite-imagery-feature-detection <!-- README-OVERVIEW-IMAGE --> dstl-satellite-imagery-feature-detection https://www.kaggle.com/c/dstl-satellite-imagery-feature-detection
-
