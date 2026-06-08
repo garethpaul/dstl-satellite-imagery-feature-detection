@@ -19,6 +19,6 @@ Pass a bounded `timeout` to each `requests` or `urlopen` call, choose separate c
 ## Review metadata
 
 - Repository: `garethpaul/dstl-satellite-imagery-feature-detection`
-- Reviewed commit: `20c8ed54d33713feb694b6b2981e55c8e95aaef6`
+- Reviewed commit: `82cc3f2f1203b44af54c0534d1bdf06166c9245f`
 - Labels: `bug`, `codex-review`, `severity:P2`
 - Codex review fingerprint: `3955c83cfecd63ea`
