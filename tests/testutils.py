@@ -1,20 +1,90 @@
+import io
 import os
+import tempfile
 import unittest
+import zipfile
+
 import utils
 
 
+class FakeResponse:
+    def __init__(self, body=b"payload"):
+        self.raw = io.BytesIO(body)
+        self.status_checked = False
+
+    def raise_for_status(self):
+        self.status_checked = True
+
+
+class FakeSession:
+    def __init__(self, response):
+        self.response = response
+        self.calls = []
+
+    def post(self, url, data=None, stream=False, timeout=None):
+        self.calls.append(
+            {
+                "url": url,
+                "data": data,
+                "stream": stream,
+                "timeout": timeout,
+            }
+        )
+        return self.response
+
+
 class DatasetLoadTest(unittest.TestCase):
+    def test_download_uses_timeout_credentials_and_output_dir(self):
+        response = FakeResponse(b"abc123")
+        session = FakeSession(response)
 
-    def test(self):
-        url = "https://www.kaggle.com/account/login?ReturnUrl=/c/dstl-satellite-imagery-feature-detection/download/"
-        filename = "sample_submission.csv.zip"
-        expected_size = 15246 # 15246 kb
-        filepath = os.path.join(os.getcwd(), filename)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = utils.download_url(
+                "https://example.test/download/sample_submission.csv.zip",
+                output_dir=tmpdir,
+                timeout=(3, 9),
+                session=session,
+                credentials={"UserName": "user", "Password": "pass"},
+            )
 
-        if os.path.exists(filepath):
-            os.remove(filepath)
+            self.assertEqual(os.path.join(tmpdir, "sample_submission.csv.zip"), filepath)
+            with open(filepath, "rb") as handle:
+                self.assertEqual(b"abc123", handle.read())
 
-        utils.download_url(url + filename)
-        self.assertTrue(os.path.exists(filepath))
-        self.assertEqual(expected_size, os.path.getsize(filepath))
+        self.assertTrue(response.status_checked)
+        self.assertEqual((3, 9), session.calls[0]["timeout"])
+        self.assertTrue(session.calls[0]["stream"])
+        self.assertEqual({"UserName": "user", "Password": "pass"}, session.calls[0]["data"])
 
+    def test_missing_credentials_file_has_clear_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            missing_path = os.path.join(tmpdir, "missing.ini")
+
+            with self.assertRaises(utils.KaggleCredentialsError):
+                utils.load_credentials(missing_path)
+
+    def test_unzip_rejects_path_traversal(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive = os.path.join(tmpdir, "bad.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("../outside.txt", "bad")
+
+            with self.assertRaises(ValueError):
+                utils.unzip(archive, output_dir=tmpdir)
+
+            self.assertFalse(os.path.exists(os.path.join(tmpdir, "..", "outside.txt")))
+
+    def test_unzip_extracts_safe_members(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive = os.path.join(tmpdir, "safe.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("nested/file.txt", "ok")
+
+            utils.unzip(archive, output_dir=tmpdir)
+
+            with open(os.path.join(tmpdir, "nested", "file.txt")) as handle:
+                self.assertEqual("ok", handle.read())
+
+
+if __name__ == "__main__":
+    unittest.main()

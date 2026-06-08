@@ -20,18 +20,27 @@ Priority:
 - Preserve the Kaggle file list and unzip workflow
 - Keep `kaggle_credentials.ini` local and untracked
 - Avoid committing downloaded competition archives or extracted datasets
-- Make network and dataset assumptions explicit
+- Make network, timeout, extraction, and dataset assumptions explicit
+
+Current baseline:
+
+- `download_url` uses explicit `(connect, read)` timeouts, checks HTTP status,
+  and accepts an injectable client for offline tests.
+- Default tests use fake HTTP responses and temporary zip files instead of live
+  Kaggle credentials or downloads.
+- Zip extraction validates member paths before writing files.
 
 Next priorities:
 
-- Add README setup for Kaggle credentials and expected local files
 - Replace password-based login flow with a maintained Kaggle API path
-- Add tests that do not depend on live credentials or large downloads
+- Add optional integration tests for real Kaggle downloads behind an explicit
+  opt-in flag
 - Define modeling or feature-detection scope before adding notebooks or scripts
 
 Contribution rules:
 
 - One PR = one focused data-loading, test, or documentation change.
+- Run `scripts/check-baseline.sh` before pushing loader changes.
 - Do not commit Kaggle credentials, downloaded zips, or extracted imagery.
 - Keep generated data outside the repository.
 - Document any competition-data source or API change.

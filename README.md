@@ -29,29 +29,57 @@ Additional scan context:
 ### Prerequisites
 
 - Git
+- Python 3
+- `requests` from `requirements.txt`
 
 ### Setup
 
 ```bash
 git clone https://github.com/garethpaul/dstl-satellite-imagery-feature-detection.git
 cd dstl-satellite-imagery-feature-detection
+python3 -m pip install -r requirements.txt
 ```
 
 The setup commands above are derived from repository files. Legacy mobile, Python, or JavaScript samples may require older SDKs or package versions than a modern workstation uses by default.
 
 ## Running or Using the Project
 
-- No single runtime entry point was identified. Start by reading the source files and manifests listed above.
+- `utils.py` downloads the configured Kaggle DSTL archives and extracts them
+  into the current working directory by default.
+- Create a local, untracked `kaggle_credentials.ini` beside `utils.py` before
+  running live downloads:
+
+```ini
+[KAGGLE]
+login = your-kaggle-username
+password = your-kaggle-password
+```
+
+```bash
+python3 utils.py
+```
 
 ## Testing and Verification
 
-- No dedicated automated test command was identified from the checked-in files. Verify changes by running the relevant build or manually exercising the sample.
+Run the offline verification gate:
+
+```bash
+python3 -m unittest discover -s tests -p "test*.py"
+scripts/check-baseline.sh
+python3 -m py_compile utils.py tests/testutils.py
+```
+
+Default tests use fake HTTP responses and temporary files. They do not require
+Kaggle credentials, live network access, downloaded archives, or extracted
+imagery.
 
 When the required SDK or runtime is unavailable, use static checks and source review first, then verify on a machine that has the matching platform toolchain.
 
 ## Configuration and Secrets
 
-- No required secret or credential file was identified in the repository scan. If you add integrations later, keep secrets out of git.
+- `kaggle_credentials.ini` is required only for live downloads and is ignored by
+  git.
+- Downloaded `.zip` archives and extracted imagery should stay outside commits.
 
 ## Security and Privacy Notes
 
@@ -63,6 +91,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
 
 - See `SECURITY.md` for vulnerability reporting and safe research guidance.
 - See `VISION.md` for project direction and contribution guardrails.
+- See `docs/plans/2026-06-08-dstl-data-loader-baseline.md` for the current
+  data-loader reliability baseline.
 
 ## Contributing
 

@@ -16,6 +16,12 @@ Python HTTP clients default to waiting forever when no timeout is set. If an ups
 
 Pass a bounded `timeout` to each `requests` or `urlopen` call, choose separate connect/read values where useful, and handle timeout exceptions with a clear retry or error path.
 
+## Resolution
+
+Resolved in the 2026-06-08 data-loader baseline. `download_url` now forwards an
+explicit `(connect, read)` timeout to the HTTP client, checks response status,
+and is covered by offline unit tests that assert timeout propagation.
+
 ## Review metadata
 
 - Repository: `garethpaul/dstl-satellite-imagery-feature-detection`

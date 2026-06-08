@@ -1,65 +1,136 @@
+import configparser
+import logging
 import os
-
-import requests
 import shutil
 import zipfile
-import logging
-import configparser
+from urllib.parse import urlparse
+
+import requests
 
 
+BASE_DOWNLOAD_URL = (
+    "https://www.kaggle.com/account/login?"
+    "ReturnUrl=/c/dstl-satellite-imagery-feature-detection/download/"
+)
+DATA_FILES = [
+    "sample_submission.csv.zip",
+    "grid_sizes.csv.zip",
+    "sixteen_band.zip",
+    "three_band.zip",
+    "train_geojson_v3.zip",
+    "train_wkt_v4.csv.zip",
+]
+DEFAULT_TIMEOUT = (10, 60)
 
-def load_and_unzip_data():
-    url = "https://www.kaggle.com/account/login?ReturnUrl=/c/dstl-satellite-imagery-feature-detection/download/"
 
-    files = [
-        "sample_submission.csv.zip",
-        "grid_sizes.csv.zip",
-        "sixteen_band.zip",
-        "three_band.zip",
-        "train_geojson_v3.zip",
-        "train_wkt_v4.csv.zip"
-    ]
+class KaggleCredentialsError(RuntimeError):
+    pass
 
-    logging.info("Start loading files ...\n")
-    for filename in files:
-        download_url(url + filename)
+
+def credentials_path():
+    return os.path.join(os.path.dirname(os.path.realpath(__file__)), "kaggle_credentials.ini")
+
+
+def load_credentials(path=None):
+    path = path or credentials_path()
+    config = configparser.ConfigParser()
+
+    if not config.read(path):
+        raise KaggleCredentialsError(
+            "Kaggle credentials file not found. Create kaggle_credentials.ini locally."
+        )
+
+    try:
+        login = config["KAGGLE"]["login"].strip()
+        password = config["KAGGLE"]["password"].strip()
+    except KeyError as exc:
+        raise KaggleCredentialsError(
+            "kaggle_credentials.ini must define [KAGGLE] login and password."
+        ) from exc
+
+    if not login or not password:
+        raise KaggleCredentialsError("Kaggle login and password must not be empty.")
+
+    return {"UserName": login, "Password": password}
+
+
+def load_and_unzip_data(output_dir=None, credentials_file=None, timeout=DEFAULT_TIMEOUT):
+    output_dir = output_dir or os.getcwd()
+    credentials = load_credentials(credentials_file)
+
+    logging.info("Start loading files ...")
+    for filename in DATA_FILES:
+        download_url(
+            BASE_DOWNLOAD_URL + filename,
+            output_dir=output_dir,
+            credentials=credentials,
+            timeout=timeout,
+        )
 
     logging.info("Extracting files")
-    for filename in files:
-        if filename.endswith('zip'):
-            unzip(filename=filename)
+    for filename in DATA_FILES:
+        if filename.endswith(".zip"):
+            unzip(os.path.join(output_dir, filename), output_dir=output_dir)
 
 
-def download_url(url):
-    filename = url.split('/')[-1]
-
-    if os.path.exists(os.path.join(os.getcwd(), filename)):
-        logging.warning("File %s exists" % filename)
-        return
-
-    config = configparser.ConfigParser()
-    cwd = os.path.dirname(os.path.realpath(__file__))
-    config.read(os.path.join(cwd, 'kaggle_credentials.ini'))
-    login = config['KAGGLE']['login']
-    password = config['KAGGLE']['password']
-    # Kaggle Username and Password
-    kaggle_info = {'UserName': login, 'Password': password}
+def filename_from_url(url):
+    filename = os.path.basename(urlparse(url).path)
+    if not filename:
+        raise ValueError("Download URL must end with a filename.")
+    return filename
 
 
-    # Login to Kaggle and retrieve the data.
-    r = requests.post(url, data=kaggle_info, stream=True)
+def download_url(
+    url,
+    output_dir=None,
+    timeout=DEFAULT_TIMEOUT,
+    session=None,
+    credentials=None,
+    credentials_file=None,
+):
+    output_dir = output_dir or os.getcwd()
+    os.makedirs(output_dir, exist_ok=True)
 
-    logging.info("Load file %s\n" % filename)
-    with open(filename, "wb") as f:
-        shutil.copyfileobj(r.raw, f)
-    logging.info("FINISH file %s\n" % filename)
-    logging.info("File size: %d kb", os.path.getsize(filename=filename))
-    return
+    filename = filename_from_url(url)
+    filepath = os.path.join(output_dir, filename)
 
-def unzip(filename):
-    logging.info("Extracting file: %s" % filename)
+    if os.path.exists(filepath):
+        logging.warning("File %s exists", filepath)
+        return filepath
+
+    credentials = credentials or load_credentials(credentials_file)
+    client = session or requests
+
+    response = client.post(url, data=credentials, stream=True, timeout=timeout)
+    response.raise_for_status()
+
+    logging.info("Load file %s", filename)
+    with open(filepath, "wb") as handle:
+        shutil.copyfileobj(response.raw, handle)
+
+    logging.info("FINISH file %s", filename)
+    logging.info("File size: %d kb", os.path.getsize(filepath))
+    return filepath
+
+
+def safe_zip_members(zip_ref, output_dir):
+    output_root = os.path.abspath(output_dir)
+
+    for member in zip_ref.infolist():
+        target_path = os.path.abspath(os.path.join(output_root, member.filename))
+        if target_path != output_root and not target_path.startswith(output_root + os.sep):
+            raise ValueError("Refusing to extract zip member outside output directory.")
+        yield member
+
+
+def unzip(filename, output_dir=None):
+    output_dir = output_dir or os.getcwd()
+    logging.info("Extracting file: %s", filename)
+
     with zipfile.ZipFile(filename, "r") as zip_ref:
-        zip_ref.extractall()
+        for member in safe_zip_members(zip_ref, output_dir):
+            zip_ref.extract(member, output_dir)
+
 
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)
