@@ -42,7 +42,7 @@ committed.
 Tests should avoid requiring real credentials unless explicitly marked as
 integration checks.
 
-## What We Will Not Merge For Now
+## What We Will Not Merge (For Now)
 
 - Credentials or downloaded Kaggle data
 - Large notebooks without documented inputs and outputs
