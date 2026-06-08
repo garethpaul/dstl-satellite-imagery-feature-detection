@@ -1,5 +1,8 @@
 ## DSTL Satellite Imagery Feature Detection Vision
 
+This document explains the current state and direction of the project.
+Project overview and developer docs: [`README.md`](README.md)
+
 DSTL Satellite Imagery Feature Detection is a small Python utility repository
 for the Kaggle DSTL satellite imagery competition.
 
