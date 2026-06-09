@@ -1,5 +1,9 @@
 # Changes
 
+## 2026-06-09
+
+- Rejected non-HTTPS download URLs before posting Kaggle credentials.
+
 ## 2026-06-08
 
 - Added a root `make check` wrapper for the offline loader baseline.

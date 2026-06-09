@@ -79,6 +79,21 @@ class DatasetLoadTest(unittest.TestCase):
         self.assertTrue(session.calls[0]["stream"])
         self.assertEqual({"UserName": "user", "Password": "pass"}, session.calls[0]["data"])
 
+    def test_download_rejects_non_https_url_before_credentials(self):
+        response = FakeResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(ValueError):
+                utils.download_url(
+                    "http://example.test/download/sample_submission.csv.zip",
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "pass"},
+                )
+
+        self.assertEqual([], session.calls)
+
     def test_download_removes_partial_file_on_stream_failure(self):
         response = FailingResponse()
         session = FakeSession(response)

@@ -82,6 +82,11 @@ def filename_from_url(url):
     return filename
 
 
+def require_https_url(url):
+    if urlparse(url).scheme.lower() != "https":
+        raise ValueError("Download URL must use HTTPS.")
+
+
 def download_url(
     url,
     output_dir=None,
@@ -90,6 +95,8 @@ def download_url(
     credentials=None,
     credentials_file=None,
 ):
+    require_https_url(url)
+
     output_dir = output_dir or os.getcwd()
     os.makedirs(output_dir, exist_ok=True)
 
