@@ -83,6 +83,33 @@ class DatasetLoadTest(unittest.TestCase):
         self.assertTrue(session.calls[0]["stream"])
         self.assertEqual({"UserName": "user", "Password": "pass"}, session.calls[0]["data"])
 
+    def test_normalize_timeout_accepts_positive_scalar_and_pair(self):
+        self.assertEqual(5, utils.normalize_timeout(5))
+        self.assertEqual(0.5, utils.normalize_timeout(0.5))
+        self.assertEqual((3, 9), utils.normalize_timeout((3, 9)))
+
+    def test_normalize_timeout_rejects_disabled_or_invalid_timeouts(self):
+        for timeout in (None, 0, -1, True, float("inf"), (3, 0), (3,), [3, 9]):
+            with self.subTest(timeout=timeout):
+                with self.assertRaises(ValueError):
+                    utils.normalize_timeout(timeout)
+
+    def test_download_rejects_invalid_timeout_before_request(self):
+        response = FakeResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(ValueError):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    timeout=None,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "pass"},
+                )
+
+        self.assertEqual([], session.calls)
+
     def test_download_rejects_non_https_url_before_credentials(self):
         response = FakeResponse()
         session = FakeSession(response)

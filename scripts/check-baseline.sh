@@ -9,6 +9,7 @@ ARCHIVE_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-archive-allowlist.md"
 SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-zip-symlink-guard.md"
 DIRECT_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-direct-credential-validation.md"
 URL_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-url-credential-guard.md"
+TIMEOUT_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-timeout-validation.md"
 
 require_file() {
   path=$1
@@ -31,6 +32,7 @@ for path in \
   "docs/plans/2026-06-08-dstl-atomic-downloads.md" \
   "docs/plans/2026-06-09-dstl-archive-allowlist.md" \
   "docs/plans/2026-06-09-dstl-direct-credential-validation.md" \
+  "docs/plans/2026-06-09-dstl-timeout-validation.md" \
   "docs/plans/2026-06-09-dstl-url-credential-guard.md" \
   "docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md" \
   "docs/plans/2026-06-09-dstl-https-download-guard.md" \
@@ -95,6 +97,14 @@ if ! grep -Fq "def normalize_credentials" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "normalize_credentials(credentials)" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "test_download_rejects_blank_supplied_credentials_before_request" "$ROOT_DIR/tests/testutils.py"; then
   printf '%s\n' "Downloader must validate supplied credentials before posting requests." >&2
+  exit 1
+fi
+
+if ! grep -Fq "def normalize_timeout" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "math.isfinite" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "timeout = normalize_timeout(timeout)" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "test_download_rejects_invalid_timeout_before_request" "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Downloader must validate timeout values before posting requests." >&2
   exit 1
 fi
 
@@ -207,6 +217,16 @@ if ! grep -Fq "make check" "$URL_CREDENTIAL_PLAN"; then
   exit 1
 fi
 
+if ! grep -Fq "Status: Completed" "$TIMEOUT_PLAN"; then
+  printf '%s\n' "Timeout validation plan must be marked completed." >&2
+  exit 1
+fi
+
+if ! grep -Fq "make check" "$TIMEOUT_PLAN"; then
+  printf '%s\n' "Timeout validation plan must record make check verification." >&2
+  exit 1
+fi
+
 if ! grep -Fq "python3 -m unittest discover" "$ROOT_DIR/README.md" ||
   ! grep -Fq "kaggle_credentials.ini" "$ROOT_DIR/README.md" ||
   ! grep -Fq "requirements.txt" "$ROOT_DIR/README.md" ||
@@ -245,6 +265,11 @@ if ! grep -Fq "embedded URL credentials" "$ROOT_DIR/README.md"; then
   exit 1
 fi
 
+if ! grep -Fq "positive finite timeout" "$ROOT_DIR/README.md"; then
+  printf '%s\n' "README must document positive finite download timeout validation." >&2
+  exit 1
+fi
+
 if ! grep -Fq "checked-in DSTL archive filename list" "$ROOT_DIR/SECURITY.md"; then
   printf '%s\n' "SECURITY must document DSTL archive filename enforcement." >&2
   exit 1
@@ -262,6 +287,11 @@ fi
 
 if ! grep -Fq "embedded URL credentials" "$ROOT_DIR/SECURITY.md"; then
   printf '%s\n' "SECURITY must document embedded URL credential rejection." >&2
+  exit 1
+fi
+
+if ! grep -Fq "positive finite timeout" "$ROOT_DIR/SECURITY.md"; then
+  printf '%s\n' "SECURITY must document positive finite download timeout validation." >&2
   exit 1
 fi
 

@@ -1,5 +1,6 @@
 import configparser
 import logging
+import math
 import os
 import stat
 import zipfile
@@ -69,6 +70,29 @@ def normalize_credentials(credentials):
     return {"UserName": login, "Password": password}
 
 
+def is_positive_timeout_value(value):
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value > 0
+    )
+
+
+def normalize_timeout(timeout):
+    if is_positive_timeout_value(timeout):
+        return timeout
+
+    if (
+        isinstance(timeout, tuple)
+        and len(timeout) == 2
+        and all(is_positive_timeout_value(value) for value in timeout)
+    ):
+        return timeout
+
+    raise ValueError("Download timeout must be a positive number or (connect, read) pair.")
+
+
 def load_and_unzip_data(output_dir=None, credentials_file=None, timeout=DEFAULT_TIMEOUT):
     output_dir = output_dir or os.getcwd()
     credentials = load_credentials(credentials_file)
@@ -121,6 +145,7 @@ def download_url(
     credentials_file=None,
 ):
     require_https_url(url)
+    timeout = normalize_timeout(timeout)
 
     output_dir = output_dir or os.getcwd()
     os.makedirs(output_dir, exist_ok=True)

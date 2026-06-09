@@ -29,6 +29,8 @@ Current baseline:
   requires HTTPS Kaggle download URLs, restricts downloads to the configured
   DSTL archive list, validates supplied credentials, and accepts an injectable
   client for offline tests.
+- Timeout values are normalized to positive finite numbers or `(connect, read)`
+  pairs before live requests are posted.
 - Default tests use fake HTTP responses and temporary zip files instead of live
   Kaggle credentials or downloads.
 - Zip extraction validates member paths and rejects symlink members before
