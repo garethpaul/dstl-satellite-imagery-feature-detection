@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Added a root `make check` wrapper for the offline loader baseline.
 - Added bounded HTTP timeouts, HTTP status checks, injectable sessions, chunked
   response writes, response closing, and explicit credential loading to the
   Kaggle data downloader.

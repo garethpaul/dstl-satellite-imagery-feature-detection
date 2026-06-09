@@ -2,6 +2,7 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+CHECK_PLAN="$ROOT_DIR/docs/plans/2026-06-08-dstl-check-wrapper.md"
 
 require_file() {
   path=$1
@@ -13,10 +14,12 @@ require_file() {
 
 for path in \
   "README.md" \
+  "Makefile" \
   "VISION.md" \
   "requirements.txt" \
   "utils.py" \
   "tests/testutils.py" \
+  "docs/plans/2026-06-08-dstl-check-wrapper.md" \
   "docs/plans/2026-06-08-dstl-data-loader-baseline.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
@@ -64,10 +67,21 @@ if ! grep -Fq "status: completed" "$ROOT_DIR/docs/plans/2026-06-08-dstl-data-loa
   exit 1
 fi
 
+if ! grep -Fq "status: completed" "$CHECK_PLAN"; then
+  printf '%s\n' "Check wrapper plan must be marked completed." >&2
+  exit 1
+fi
+
 if ! grep -Fq "python3 -m unittest discover" "$ROOT_DIR/README.md" ||
   ! grep -Fq "kaggle_credentials.ini" "$ROOT_DIR/README.md" ||
-  ! grep -Fq "requirements.txt" "$ROOT_DIR/README.md"; then
-  printf '%s\n' "README must document tests, Kaggle credentials, and requirements." >&2
+  ! grep -Fq "requirements.txt" "$ROOT_DIR/README.md" ||
+  ! grep -Fq "make check" "$ROOT_DIR/README.md"; then
+  printf '%s\n' "README must document tests, Kaggle credentials, requirements, and make check." >&2
+  exit 1
+fi
+
+if ! grep -Fq "check: verify" "$ROOT_DIR/Makefile"; then
+  printf '%s\n' "Makefile must expose make check as the repository verification wrapper." >&2
   exit 1
 fi
 

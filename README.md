@@ -13,6 +13,7 @@ This README is based on the checked-in source, manifests, scripts, and repositor
 
 - `README.md` - project overview and local usage notes
 - `docs` - source or example code
+- `Makefile` - repository-level verification wrapper
 - `SECURITY.md` - security reporting and disclosure guidance
 - `tests` - source or example code
 - `VISION.md` - project direction and maintenance guardrails
@@ -21,7 +22,7 @@ Additional scan context:
 
 - Source directories: docs, tests
 - Dependency and build manifests: none detected
-- Entry points or build surfaces: none detected
+- Entry points or build surfaces: Makefile, `scripts/check-baseline.sh`
 - Test-looking files: tests/testutils.py
 
 ## Getting Started
@@ -64,14 +65,15 @@ python3 utils.py
 Run the offline verification gate:
 
 ```bash
+make check
 python3 -m unittest discover -s tests -p "test*.py"
 scripts/check-baseline.sh
 python3 -m py_compile utils.py tests/testutils.py
 ```
 
-Default tests use fake HTTP responses and temporary files. They do not require
-Kaggle credentials, live network access, downloaded archives, or extracted
-imagery.
+`make check` runs the source baseline and offline unittest discovery. Default
+tests use fake HTTP responses and temporary files. They do not require Kaggle
+credentials, live network access, downloaded archives, or extracted imagery.
 
 When the required SDK or runtime is unavailable, use static checks and source review first, then verify on a machine that has the matching platform toolchain.
 
