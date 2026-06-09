@@ -2,6 +2,8 @@
 
 ## 2026-06-09
 
+- Rejected embedded URL credentials before loading or posting local Kaggle
+  credentials.
 - Normalized direct Kaggle credential dictionaries and rejected blank supplied
   credentials before posting download requests.
 - Rejected zip symlink members before extraction and exposed a Python compile

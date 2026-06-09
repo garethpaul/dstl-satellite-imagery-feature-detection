@@ -103,6 +103,8 @@ def require_https_url(url):
         raise ValueError("Download URL must use HTTPS.")
     if parsed_url.hostname not in ALLOWED_DOWNLOAD_HOSTS:
         raise ValueError("Download URL must use a Kaggle host.")
+    if parsed_url.username or parsed_url.password:
+        raise ValueError("Download URL must not include embedded credentials.")
 
 
 def require_allowed_data_file(filename):

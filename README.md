@@ -48,7 +48,7 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 - `utils.py` downloads the configured Kaggle DSTL archives and extracts them
   into the current working directory by default.
 - Downloader helpers require HTTPS download URLs on Kaggle hosts before Kaggle
-  credentials are loaded or posted.
+  credentials are loaded or posted, and reject embedded URL credentials.
 - Downloader helpers only accept filenames from the checked-in DSTL archive
   list before Kaggle credentials are loaded or posted.
 - Create a local, untracked `kaggle_credentials.ini` beside `utils.py` before
@@ -89,7 +89,7 @@ When the required SDK or runtime is unavailable, use static checks and source re
   git.
 - Downloaded `.zip` archives and extracted imagery should stay outside commits.
 - HTTPS download URLs are enforced before credentials are posted, and live
-  download URLs must use Kaggle hosts.
+  download URLs must use Kaggle hosts without embedded URL credentials.
 - File-loaded and supplied credentials are normalized before any request is
   posted, and blank credentials are rejected.
 - Live download filenames must match the checked-in DSTL archive list.
@@ -118,6 +118,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   member extraction guard.
 - See `docs/plans/2026-06-09-dstl-direct-credential-validation.md` for direct
   credential validation before requests.
+- See `docs/plans/2026-06-09-dstl-url-credential-guard.md` for embedded URL
+  credential rejection before requests.
 
 ## Contributing
 

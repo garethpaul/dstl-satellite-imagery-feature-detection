@@ -8,6 +8,7 @@ HOST_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md"
 ARCHIVE_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-archive-allowlist.md"
 SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-zip-symlink-guard.md"
 DIRECT_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-direct-credential-validation.md"
+URL_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-url-credential-guard.md"
 
 require_file() {
   path=$1
@@ -30,6 +31,7 @@ for path in \
   "docs/plans/2026-06-08-dstl-atomic-downloads.md" \
   "docs/plans/2026-06-09-dstl-archive-allowlist.md" \
   "docs/plans/2026-06-09-dstl-direct-credential-validation.md" \
+  "docs/plans/2026-06-09-dstl-url-credential-guard.md" \
   "docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md" \
   "docs/plans/2026-06-09-dstl-https-download-guard.md" \
   "docs/plans/2026-06-09-dstl-zip-symlink-guard.md" \
@@ -65,6 +67,12 @@ if ! grep -Fq "ALLOWED_DOWNLOAD_HOSTS" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "parsed_url.hostname" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "test_download_rejects_non_kaggle_host_before_credentials" "$ROOT_DIR/tests/testutils.py"; then
   printf '%s\n' "Downloader must reject non-Kaggle hosts before posting credentials." >&2
+  exit 1
+fi
+
+if ! grep -Fq "parsed_url.username or parsed_url.password" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "test_download_rejects_embedded_url_credentials_before_credentials" "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Downloader must reject embedded URL credentials before posting requests." >&2
   exit 1
 fi
 
@@ -189,6 +197,16 @@ if ! grep -Fq "make check" "$DIRECT_CREDENTIAL_PLAN"; then
   exit 1
 fi
 
+if ! grep -Fq "Status: Completed" "$URL_CREDENTIAL_PLAN"; then
+  printf '%s\n' "URL credential guard plan must be marked completed." >&2
+  exit 1
+fi
+
+if ! grep -Fq "make check" "$URL_CREDENTIAL_PLAN"; then
+  printf '%s\n' "URL credential guard plan must record make check verification." >&2
+  exit 1
+fi
+
 if ! grep -Fq "python3 -m unittest discover" "$ROOT_DIR/README.md" ||
   ! grep -Fq "kaggle_credentials.ini" "$ROOT_DIR/README.md" ||
   ! grep -Fq "requirements.txt" "$ROOT_DIR/README.md" ||
@@ -222,6 +240,11 @@ if ! grep -Fq "supplied credentials are normalized" "$ROOT_DIR/README.md"; then
   exit 1
 fi
 
+if ! grep -Fq "embedded URL credentials" "$ROOT_DIR/README.md"; then
+  printf '%s\n' "README must document embedded URL credential rejection." >&2
+  exit 1
+fi
+
 if ! grep -Fq "checked-in DSTL archive filename list" "$ROOT_DIR/SECURITY.md"; then
   printf '%s\n' "SECURITY must document DSTL archive filename enforcement." >&2
   exit 1
@@ -234,6 +257,11 @@ fi
 
 if ! grep -Fq "Supplied Kaggle credentials are normalized" "$ROOT_DIR/SECURITY.md"; then
   printf '%s\n' "SECURITY must document direct credential validation." >&2
+  exit 1
+fi
+
+if ! grep -Fq "embedded URL credentials" "$ROOT_DIR/SECURITY.md"; then
+  printf '%s\n' "SECURITY must document embedded URL credential rejection." >&2
   exit 1
 fi
 

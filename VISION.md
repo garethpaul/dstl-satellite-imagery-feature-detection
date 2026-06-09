@@ -20,6 +20,7 @@ Priority:
 - Preserve the Kaggle file list and unzip workflow
 - Keep `kaggle_credentials.ini` local and untracked
 - Avoid committing downloaded competition archives or extracted datasets
+- Reject credential-bearing download URLs before loading local credentials
 - Make network, timeout, extraction, and dataset assumptions explicit
 
 Current baseline:
