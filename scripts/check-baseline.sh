@@ -6,6 +6,7 @@ CHECK_PLAN="$ROOT_DIR/docs/plans/2026-06-08-dstl-check-wrapper.md"
 HTTPS_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-https-download-guard.md"
 HOST_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md"
 ARCHIVE_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-archive-allowlist.md"
+SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-zip-symlink-guard.md"
 
 require_file() {
   path=$1
@@ -29,6 +30,7 @@ for path in \
   "docs/plans/2026-06-09-dstl-archive-allowlist.md" \
   "docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md" \
   "docs/plans/2026-06-09-dstl-https-download-guard.md" \
+  "docs/plans/2026-06-09-dstl-zip-symlink-guard.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -69,6 +71,13 @@ if ! grep -Fq "ALLOWED_DATA_FILES" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "require_allowed_data_file(filename)" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "test_download_rejects_unexpected_kaggle_file_before_credentials" "$ROOT_DIR/tests/testutils.py"; then
   printf '%s\n' "Downloader must reject unexpected DSTL archive filenames before posting credentials." >&2
+  exit 1
+fi
+
+if ! grep -Fq "stat.S_ISLNK" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "Refusing to extract zip symlink member" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "test_unzip_rejects_symlink_members" "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Zip extraction must reject symlink members before writing files." >&2
   exit 1
 fi
 
@@ -151,6 +160,16 @@ if ! grep -Fq "make check" "$ARCHIVE_PLAN"; then
   exit 1
 fi
 
+if ! grep -Fq "status: completed" "$SYMLINK_PLAN"; then
+  printf '%s\n' "DSTL zip symlink guard plan must be marked completed." >&2
+  exit 1
+fi
+
+if ! grep -Fq "make check" "$SYMLINK_PLAN"; then
+  printf '%s\n' "DSTL zip symlink guard plan must record make check verification." >&2
+  exit 1
+fi
+
 if ! grep -Fq "python3 -m unittest discover" "$ROOT_DIR/README.md" ||
   ! grep -Fq "kaggle_credentials.ini" "$ROOT_DIR/README.md" ||
   ! grep -Fq "requirements.txt" "$ROOT_DIR/README.md" ||
@@ -174,13 +193,29 @@ if ! grep -Fq "checked-in DSTL archive list" "$ROOT_DIR/README.md"; then
   exit 1
 fi
 
+if ! grep -Fq "symlink members" "$ROOT_DIR/README.md"; then
+  printf '%s\n' "README must document zip symlink member rejection." >&2
+  exit 1
+fi
+
 if ! grep -Fq "checked-in DSTL archive filename list" "$ROOT_DIR/SECURITY.md"; then
   printf '%s\n' "SECURITY must document DSTL archive filename enforcement." >&2
   exit 1
 fi
 
+if ! grep -Fq "symlink members" "$ROOT_DIR/SECURITY.md"; then
+  printf '%s\n' "SECURITY must document zip symlink member rejection." >&2
+  exit 1
+fi
+
 if ! grep -Fq "check: verify" "$ROOT_DIR/Makefile"; then
   printf '%s\n' "Makefile must expose make check as the repository verification wrapper." >&2
+  exit 1
+fi
+
+if ! grep -Fq "build:" "$ROOT_DIR/Makefile" ||
+  ! grep -Fq "verify: lint test build" "$ROOT_DIR/Makefile"; then
+  printf '%s\n' "Makefile must expose build and include it in verification." >&2
   exit 1
 fi
 

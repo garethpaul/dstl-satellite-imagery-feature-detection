@@ -72,12 +72,14 @@ Run the offline verification gate:
 make check
 python3 -m unittest discover -s tests -p "test*.py"
 scripts/check-baseline.sh
+make build
 python3 -m py_compile utils.py tests/testutils.py
 ```
 
 `make check` runs the source baseline and offline unittest discovery. Default
 tests use fake HTTP responses and temporary files. They do not require Kaggle
 credentials, live network access, downloaded archives, or extracted imagery.
+The baseline also compiles the Python loader and tests through `make build`.
 
 When the required SDK or runtime is unavailable, use static checks and source review first, then verify on a machine that has the matching platform toolchain.
 
@@ -89,6 +91,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - HTTPS download URLs are enforced before credentials are posted, and live
   download URLs must use Kaggle hosts.
 - Live download filenames must match the checked-in DSTL archive list.
+- Zip extraction rejects path traversal and symlink members before writing
+  files.
 
 ## Security and Privacy Notes
 
@@ -108,6 +112,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   Kaggle host download guard.
 - See `docs/plans/2026-06-09-dstl-archive-allowlist.md` for the DSTL archive
   filename allow-list.
+- See `docs/plans/2026-06-09-dstl-zip-symlink-guard.md` for the zip symlink
+  member extraction guard.
 
 ## Contributing
 

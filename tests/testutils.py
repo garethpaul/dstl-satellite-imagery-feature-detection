@@ -187,6 +187,20 @@ class DatasetLoadTest(unittest.TestCase):
 
             self.assertFalse(os.path.exists(os.path.join(tmpdir, "..", "outside.txt")))
 
+    def test_unzip_rejects_symlink_members(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive = os.path.join(tmpdir, "symlink.zip")
+            link_info = zipfile.ZipInfo("link")
+            link_info.create_system = 3
+            link_info.external_attr = 0o120777 << 16
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr(link_info, "../outside.txt")
+
+            with self.assertRaises(ValueError):
+                utils.unzip(archive, output_dir=tmpdir)
+
+            self.assertFalse(os.path.lexists(os.path.join(tmpdir, "link")))
+
     def test_unzip_extracts_safe_members(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             archive = os.path.join(tmpdir, "safe.zip")

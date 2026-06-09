@@ -29,7 +29,8 @@ Current baseline:
   DSTL archive list, and accepts an injectable client for offline tests.
 - Default tests use fake HTTP responses and temporary zip files instead of live
   Kaggle credentials or downloads.
-- Zip extraction validates member paths before writing files.
+- Zip extraction validates member paths and rejects symlink members before
+  writing files.
 
 Next priorities:
 

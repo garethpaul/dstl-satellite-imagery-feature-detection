@@ -1,6 +1,7 @@
 import configparser
 import logging
 import os
+import stat
 import zipfile
 from urllib.parse import parse_qs, urlparse
 
@@ -153,6 +154,8 @@ def safe_zip_members(zip_ref, output_dir):
     output_root = os.path.abspath(output_dir)
 
     for member in zip_ref.infolist():
+        if stat.S_ISLNK(member.external_attr >> 16):
+            raise ValueError("Refusing to extract zip symlink member.")
         target_path = os.path.abspath(os.path.join(output_root, member.filename))
         if target_path != output_root and not target_path.startswith(output_root + os.sep):
             raise ValueError("Refusing to extract zip member outside output directory.")
