@@ -113,6 +113,21 @@ class DatasetLoadTest(unittest.TestCase):
 
         self.assertEqual([], session.calls)
 
+    def test_download_rejects_unexpected_kaggle_file_before_credentials(self):
+        response = FakeResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(ValueError):
+                utils.download_url(
+                    kaggle_url("unexpected.zip"),
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials_file=os.path.join(tmpdir, "missing.ini"),
+                )
+
+        self.assertEqual([], session.calls)
+
     def test_download_removes_partial_file_on_stream_failure(self):
         response = FailingResponse()
         session = FakeSession(response)

@@ -19,6 +19,7 @@ DATA_FILES = [
     "train_geojson_v3.zip",
     "train_wkt_v4.csv.zip",
 ]
+ALLOWED_DATA_FILES = set(DATA_FILES)
 DEFAULT_TIMEOUT = (10, 60)
 CHUNK_SIZE = 1024 * 1024
 ALLOWED_DOWNLOAD_HOSTS = {"kaggle.com", "www.kaggle.com"}
@@ -91,6 +92,11 @@ def require_https_url(url):
         raise ValueError("Download URL must use a Kaggle host.")
 
 
+def require_allowed_data_file(filename):
+    if filename not in ALLOWED_DATA_FILES:
+        raise ValueError("Download filename must be in the configured DSTL data file list.")
+
+
 def download_url(
     url,
     output_dir=None,
@@ -105,6 +111,7 @@ def download_url(
     os.makedirs(output_dir, exist_ok=True)
 
     filename = filename_from_url(url)
+    require_allowed_data_file(filename)
     filepath = os.path.join(output_dir, filename)
     partial_path = filepath + ".part"
 

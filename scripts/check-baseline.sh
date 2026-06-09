@@ -5,6 +5,7 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 CHECK_PLAN="$ROOT_DIR/docs/plans/2026-06-08-dstl-check-wrapper.md"
 HTTPS_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-https-download-guard.md"
 HOST_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md"
+ARCHIVE_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-archive-allowlist.md"
 
 require_file() {
   path=$1
@@ -17,6 +18,7 @@ require_file() {
 for path in \
   "README.md" \
   "Makefile" \
+  "SECURITY.md" \
   "VISION.md" \
   "requirements.txt" \
   "utils.py" \
@@ -24,6 +26,7 @@ for path in \
   "docs/plans/2026-06-08-dstl-check-wrapper.md" \
   "docs/plans/2026-06-08-dstl-data-loader-baseline.md" \
   "docs/plans/2026-06-08-dstl-atomic-downloads.md" \
+  "docs/plans/2026-06-09-dstl-archive-allowlist.md" \
   "docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md" \
   "docs/plans/2026-06-09-dstl-https-download-guard.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
@@ -60,6 +63,31 @@ if ! grep -Fq "ALLOWED_DOWNLOAD_HOSTS" "$ROOT_DIR/utils.py" ||
   printf '%s\n' "Downloader must reject non-Kaggle hosts before posting credentials." >&2
   exit 1
 fi
+
+if ! grep -Fq "ALLOWED_DATA_FILES" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "def require_allowed_data_file" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "require_allowed_data_file(filename)" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "test_download_rejects_unexpected_kaggle_file_before_credentials" "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Downloader must reject unexpected DSTL archive filenames before posting credentials." >&2
+  exit 1
+fi
+
+python3 - "$ROOT_DIR/utils.py" <<'PY'
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+download = source[source.index("def download_url("):]
+order = [
+    "require_https_url(url)",
+    "filename = filename_from_url(url)",
+    "require_allowed_data_file(filename)",
+    "credentials = credentials or load_credentials(credentials_file)",
+]
+positions = [download.index(token) for token in order]
+if positions != sorted(positions):
+    raise SystemExit("Download URL, filename, and archive allowlist checks must run before credential loading.")
+PY
 
 python3 - "$ROOT_DIR/utils.py" <<'PY'
 import ast
@@ -113,6 +141,16 @@ if ! grep -Fq "status: completed" "$HOST_PLAN"; then
   exit 1
 fi
 
+if ! grep -Fq "status: completed" "$ARCHIVE_PLAN"; then
+  printf '%s\n' "DSTL archive allowlist plan must be marked completed." >&2
+  exit 1
+fi
+
+if ! grep -Fq "make check" "$ARCHIVE_PLAN"; then
+  printf '%s\n' "DSTL archive allowlist plan must record make check verification." >&2
+  exit 1
+fi
+
 if ! grep -Fq "python3 -m unittest discover" "$ROOT_DIR/README.md" ||
   ! grep -Fq "kaggle_credentials.ini" "$ROOT_DIR/README.md" ||
   ! grep -Fq "requirements.txt" "$ROOT_DIR/README.md" ||
@@ -128,6 +166,16 @@ fi
 
 if ! grep -Fq "Kaggle hosts" "$ROOT_DIR/README.md"; then
   printf '%s\n' "README must document Kaggle host enforcement." >&2
+  exit 1
+fi
+
+if ! grep -Fq "checked-in DSTL archive list" "$ROOT_DIR/README.md"; then
+  printf '%s\n' "README must document DSTL archive filename enforcement." >&2
+  exit 1
+fi
+
+if ! grep -Fq "checked-in DSTL archive filename list" "$ROOT_DIR/SECURITY.md"; then
+  printf '%s\n' "SECURITY must document DSTL archive filename enforcement." >&2
   exit 1
 fi
 

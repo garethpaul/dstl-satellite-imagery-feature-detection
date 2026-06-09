@@ -2,6 +2,8 @@
 
 ## 2026-06-09
 
+- Restricted live downloads to the checked-in DSTL archive filename list before
+  loading or posting credentials.
 - Rejected non-Kaggle download hosts before loading or posting credentials.
 - Rejected non-HTTPS download URLs before posting Kaggle credentials.
 
