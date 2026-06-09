@@ -6,6 +6,10 @@ import zipfile
 import utils
 
 
+def kaggle_url(filename="sample_submission.csv.zip"):
+    return utils.BASE_DOWNLOAD_URL + filename
+
+
 class FakeResponse:
     def __init__(self, chunks=None):
         self.chunks = chunks or [b"payload"]
@@ -61,7 +65,7 @@ class DatasetLoadTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = utils.download_url(
-                "https://example.test/download/sample_submission.csv.zip",
+                kaggle_url(),
                 output_dir=tmpdir,
                 timeout=(3, 9),
                 session=session,
@@ -86,10 +90,25 @@ class DatasetLoadTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             with self.assertRaises(ValueError):
                 utils.download_url(
-                    "http://example.test/download/sample_submission.csv.zip",
+                    kaggle_url().replace("https://", "http://", 1),
                     output_dir=tmpdir,
                     session=session,
                     credentials={"UserName": "user", "Password": "pass"},
+                )
+
+        self.assertEqual([], session.calls)
+
+    def test_download_rejects_non_kaggle_host_before_credentials(self):
+        response = FakeResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(ValueError):
+                utils.download_url(
+                    "https://example.test/download/sample_submission.csv.zip",
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials_file=os.path.join(tmpdir, "missing.ini"),
                 )
 
         self.assertEqual([], session.calls)
@@ -103,7 +122,7 @@ class DatasetLoadTest(unittest.TestCase):
 
             with self.assertRaises(RuntimeError):
                 utils.download_url(
-                    "https://example.test/download/sample_submission.csv.zip",
+                    kaggle_url(),
                     output_dir=tmpdir,
                     session=session,
                     credentials={"UserName": "user", "Password": "pass"},
@@ -125,7 +144,7 @@ class DatasetLoadTest(unittest.TestCase):
                 handle.write(b"stale")
 
             utils.download_url(
-                "https://example.test/download/sample_submission.csv.zip",
+                kaggle_url(),
                 output_dir=tmpdir,
                 session=session,
                 credentials={"UserName": "user", "Password": "pass"},

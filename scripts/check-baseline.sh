@@ -4,6 +4,7 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 CHECK_PLAN="$ROOT_DIR/docs/plans/2026-06-08-dstl-check-wrapper.md"
 HTTPS_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-https-download-guard.md"
+HOST_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md"
 
 require_file() {
   path=$1
@@ -23,6 +24,7 @@ for path in \
   "docs/plans/2026-06-08-dstl-check-wrapper.md" \
   "docs/plans/2026-06-08-dstl-data-loader-baseline.md" \
   "docs/plans/2026-06-08-dstl-atomic-downloads.md" \
+  "docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md" \
   "docs/plans/2026-06-09-dstl-https-download-guard.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
@@ -49,6 +51,13 @@ if ! grep -Fq "def require_https_url" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "require_https_url(url)" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "test_download_rejects_non_https_url_before_credentials" "$ROOT_DIR/tests/testutils.py"; then
   printf '%s\n' "Downloader must reject non-HTTPS URLs before posting credentials." >&2
+  exit 1
+fi
+
+if ! grep -Fq "ALLOWED_DOWNLOAD_HOSTS" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "parsed_url.hostname" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "test_download_rejects_non_kaggle_host_before_credentials" "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Downloader must reject non-Kaggle hosts before posting credentials." >&2
   exit 1
 fi
 
@@ -99,6 +108,11 @@ if ! grep -Fq "status: completed" "$HTTPS_PLAN"; then
   exit 1
 fi
 
+if ! grep -Fq "status: completed" "$HOST_PLAN"; then
+  printf '%s\n' "Kaggle host download guard plan must be marked completed." >&2
+  exit 1
+fi
+
 if ! grep -Fq "python3 -m unittest discover" "$ROOT_DIR/README.md" ||
   ! grep -Fq "kaggle_credentials.ini" "$ROOT_DIR/README.md" ||
   ! grep -Fq "requirements.txt" "$ROOT_DIR/README.md" ||
@@ -109,6 +123,11 @@ fi
 
 if ! grep -Fq "HTTPS download URLs" "$ROOT_DIR/README.md"; then
   printf '%s\n' "README must document HTTPS download URL enforcement." >&2
+  exit 1
+fi
+
+if ! grep -Fq "Kaggle hosts" "$ROOT_DIR/README.md"; then
+  printf '%s\n' "README must document Kaggle host enforcement." >&2
   exit 1
 fi
 

@@ -2,6 +2,7 @@
 
 ## 2026-06-09
 
+- Rejected non-Kaggle download hosts before loading or posting credentials.
 - Rejected non-HTTPS download URLs before posting Kaggle credentials.
 
 ## 2026-06-08

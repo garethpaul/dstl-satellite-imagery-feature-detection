@@ -21,6 +21,7 @@ DATA_FILES = [
 ]
 DEFAULT_TIMEOUT = (10, 60)
 CHUNK_SIZE = 1024 * 1024
+ALLOWED_DOWNLOAD_HOSTS = {"kaggle.com", "www.kaggle.com"}
 
 
 class KaggleCredentialsError(RuntimeError):
@@ -83,8 +84,11 @@ def filename_from_url(url):
 
 
 def require_https_url(url):
-    if urlparse(url).scheme.lower() != "https":
+    parsed_url = urlparse(url)
+    if parsed_url.scheme.lower() != "https":
         raise ValueError("Download URL must use HTTPS.")
+    if parsed_url.hostname not in ALLOWED_DOWNLOAD_HOSTS:
+        raise ValueError("Download URL must use a Kaggle host.")
 
 
 def download_url(
