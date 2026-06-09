@@ -21,6 +21,7 @@ for path in \
   "tests/testutils.py" \
   "docs/plans/2026-06-08-dstl-check-wrapper.md" \
   "docs/plans/2026-06-08-dstl-data-loader-baseline.md" \
+  "docs/plans/2026-06-08-dstl-atomic-downloads.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -32,6 +33,13 @@ if ! grep -Fq "iter_content" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "CHUNK_SIZE" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "close()" "$ROOT_DIR/utils.py"; then
   printf '%s\n' "Downloader must stream chunks and close HTTP responses." >&2
+  exit 1
+fi
+
+if ! grep -Fq "partial_path = filepath + \".part\"" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "os.replace(partial_path, filepath)" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "test_download_removes_partial_file_on_stream_failure" "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Downloader must write atomically and test interrupted streams." >&2
   exit 1
 fi
 
@@ -69,6 +77,11 @@ fi
 
 if ! grep -Fq "status: completed" "$CHECK_PLAN"; then
   printf '%s\n' "Check wrapper plan must be marked completed." >&2
+  exit 1
+fi
+
+if ! grep -Fq "status: completed" "$ROOT_DIR/docs/plans/2026-06-08-dstl-atomic-downloads.md"; then
+  printf '%s\n' "Atomic download plan must be marked completed." >&2
   exit 1
 fi
 

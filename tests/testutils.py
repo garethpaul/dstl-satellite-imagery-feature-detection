@@ -41,6 +41,13 @@ class FakeSession:
         return self.response
 
 
+class FailingResponse(FakeResponse):
+    def iter_content(self, chunk_size):
+        self.chunk_size = chunk_size
+        yield b"partial"
+        raise RuntimeError("download interrupted")
+
+
 class DatasetLoadTest(unittest.TestCase):
     def test_filename_from_legacy_kaggle_login_url(self):
         self.assertEqual(
@@ -71,6 +78,47 @@ class DatasetLoadTest(unittest.TestCase):
         self.assertEqual((3, 9), session.calls[0]["timeout"])
         self.assertTrue(session.calls[0]["stream"])
         self.assertEqual({"UserName": "user", "Password": "pass"}, session.calls[0]["data"])
+
+    def test_download_removes_partial_file_on_stream_failure(self):
+        response = FailingResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+
+            with self.assertRaises(RuntimeError):
+                utils.download_url(
+                    "https://example.test/download/sample_submission.csv.zip",
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "pass"},
+                )
+
+            self.assertFalse(os.path.exists(filepath))
+            self.assertFalse(os.path.exists(filepath + ".part"))
+
+        self.assertTrue(response.status_checked)
+        self.assertTrue(response.closed)
+
+    def test_download_removes_stale_partial_file_before_retry(self):
+        response = FakeResponse([b"fresh"])
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+            with open(filepath + ".part", "wb") as handle:
+                handle.write(b"stale")
+
+            utils.download_url(
+                "https://example.test/download/sample_submission.csv.zip",
+                output_dir=tmpdir,
+                session=session,
+                credentials={"UserName": "user", "Password": "pass"},
+            )
+
+            with open(filepath, "rb") as handle:
+                self.assertEqual(b"fresh", handle.read())
+            self.assertFalse(os.path.exists(filepath + ".part"))
 
     def test_missing_credentials_file_has_clear_error(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -95,10 +95,14 @@ def download_url(
 
     filename = filename_from_url(url)
     filepath = os.path.join(output_dir, filename)
+    partial_path = filepath + ".part"
 
     if os.path.exists(filepath):
         logging.warning("File %s exists", filepath)
         return filepath
+
+    if os.path.exists(partial_path):
+        os.remove(partial_path)
 
     credentials = credentials or load_credentials(credentials_file)
     client = session or requests
@@ -108,10 +112,15 @@ def download_url(
         response.raise_for_status()
 
         logging.info("Load file %s", filename)
-        with open(filepath, "wb") as handle:
+        with open(partial_path, "wb") as handle:
             for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                 if chunk:
                     handle.write(chunk)
+        os.replace(partial_path, filepath)
+    except Exception:
+        if os.path.exists(partial_path):
+            os.remove(partial_path)
+        raise
     finally:
         close = getattr(response, "close", None)
         if close:
