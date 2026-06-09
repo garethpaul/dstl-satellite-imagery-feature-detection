@@ -2,6 +2,8 @@
 
 ## 2026-06-09
 
+- Normalized direct Kaggle credential dictionaries and rejected blank supplied
+  credentials before posting download requests.
 - Rejected zip symlink members before extraction and exposed a Python compile
   `make build` gate.
 - Restricted live downloads to the checked-in DSTL archive filename list before

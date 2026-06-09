@@ -176,6 +176,21 @@ class DatasetLoadTest(unittest.TestCase):
             with self.assertRaises(utils.KaggleCredentialsError):
                 utils.load_credentials(missing_path)
 
+    def test_download_rejects_blank_supplied_credentials_before_request(self):
+        response = FakeResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(utils.KaggleCredentialsError):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials={"UserName": "  ", "Password": ""},
+                )
+
+        self.assertEqual([], session.calls)
+
     def test_unzip_rejects_path_traversal(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             archive = os.path.join(tmpdir, "bad.zip")

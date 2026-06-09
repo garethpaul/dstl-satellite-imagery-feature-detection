@@ -44,12 +44,24 @@ def load_credentials(path=None):
         )
 
     try:
-        login = config["KAGGLE"]["login"].strip()
-        password = config["KAGGLE"]["password"].strip()
+        credentials = {
+            "UserName": config["KAGGLE"]["login"],
+            "Password": config["KAGGLE"]["password"],
+        }
     except KeyError as exc:
         raise KaggleCredentialsError(
             "kaggle_credentials.ini must define [KAGGLE] login and password."
         ) from exc
+
+    return normalize_credentials(credentials)
+
+
+def normalize_credentials(credentials):
+    try:
+        login = credentials["UserName"].strip()
+        password = credentials["Password"].strip()
+    except (KeyError, AttributeError) as exc:
+        raise KaggleCredentialsError("Kaggle credentials must include UserName and Password.") from exc
 
     if not login or not password:
         raise KaggleCredentialsError("Kaggle login and password must not be empty.")
@@ -123,7 +135,11 @@ def download_url(
     if os.path.exists(partial_path):
         os.remove(partial_path)
 
-    credentials = credentials or load_credentials(credentials_file)
+    credentials = (
+        normalize_credentials(credentials)
+        if credentials is not None
+        else load_credentials(credentials_file)
+    )
     client = session or requests
 
     response = client.post(url, data=credentials, stream=True, timeout=timeout)

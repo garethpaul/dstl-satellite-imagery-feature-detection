@@ -38,8 +38,9 @@ For web services, APIs, sockets, or scraping workflows, prioritize reports invol
 
 Live DSTL downloads must stay restricted to HTTPS Kaggle hosts and filenames in
 the checked-in DSTL archive filename list before Kaggle credentials are loaded
-or posted. Zip extraction rejects path traversal and symlink members before
-writing files.
+or posted. Supplied Kaggle credentials are normalized and rejected when blank
+before requests are posted. Zip extraction rejects path traversal and symlink members
+before writing files.
 
 ## Dependency and Supply Chain Security
 

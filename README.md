@@ -90,6 +90,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - Downloaded `.zip` archives and extracted imagery should stay outside commits.
 - HTTPS download URLs are enforced before credentials are posted, and live
   download URLs must use Kaggle hosts.
+- File-loaded and supplied credentials are normalized before any request is
+  posted, and blank credentials are rejected.
 - Live download filenames must match the checked-in DSTL archive list.
 - Zip extraction rejects path traversal and symlink members before writing
   files.
@@ -114,6 +116,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   filename allow-list.
 - See `docs/plans/2026-06-09-dstl-zip-symlink-guard.md` for the zip symlink
   member extraction guard.
+- See `docs/plans/2026-06-09-dstl-direct-credential-validation.md` for direct
+  credential validation before requests.
 
 ## Contributing
 

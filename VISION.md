@@ -26,7 +26,8 @@ Current baseline:
 
 - `download_url` uses explicit `(connect, read)` timeouts, checks HTTP status,
   requires HTTPS Kaggle download URLs, restricts downloads to the configured
-  DSTL archive list, and accepts an injectable client for offline tests.
+  DSTL archive list, validates supplied credentials, and accepts an injectable
+  client for offline tests.
 - Default tests use fake HTTP responses and temporary zip files instead of live
   Kaggle credentials or downloads.
 - Zip extraction validates member paths and rejects symlink members before

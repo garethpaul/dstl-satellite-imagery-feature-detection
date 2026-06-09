@@ -7,6 +7,7 @@ HTTPS_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-https-download-guard.md"
 HOST_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md"
 ARCHIVE_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-archive-allowlist.md"
 SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-zip-symlink-guard.md"
+DIRECT_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-direct-credential-validation.md"
 
 require_file() {
   path=$1
@@ -28,6 +29,7 @@ for path in \
   "docs/plans/2026-06-08-dstl-data-loader-baseline.md" \
   "docs/plans/2026-06-08-dstl-atomic-downloads.md" \
   "docs/plans/2026-06-09-dstl-archive-allowlist.md" \
+  "docs/plans/2026-06-09-dstl-direct-credential-validation.md" \
   "docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md" \
   "docs/plans/2026-06-09-dstl-https-download-guard.md" \
   "docs/plans/2026-06-09-dstl-zip-symlink-guard.md" \
@@ -81,6 +83,13 @@ if ! grep -Fq "stat.S_ISLNK" "$ROOT_DIR/utils.py" ||
   exit 1
 fi
 
+if ! grep -Fq "def normalize_credentials" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "normalize_credentials(credentials)" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "test_download_rejects_blank_supplied_credentials_before_request" "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Downloader must validate supplied credentials before posting requests." >&2
+  exit 1
+fi
+
 python3 - "$ROOT_DIR/utils.py" <<'PY'
 import pathlib
 import sys
@@ -91,7 +100,7 @@ order = [
     "require_https_url(url)",
     "filename = filename_from_url(url)",
     "require_allowed_data_file(filename)",
-    "credentials = credentials or load_credentials(credentials_file)",
+    "credentials = (",
 ]
 positions = [download.index(token) for token in order]
 if positions != sorted(positions):
@@ -170,6 +179,16 @@ if ! grep -Fq "make check" "$SYMLINK_PLAN"; then
   exit 1
 fi
 
+if ! grep -Fq "Status: Completed" "$DIRECT_CREDENTIAL_PLAN"; then
+  printf '%s\n' "Direct credential validation plan must be marked completed." >&2
+  exit 1
+fi
+
+if ! grep -Fq "make check" "$DIRECT_CREDENTIAL_PLAN"; then
+  printf '%s\n' "Direct credential validation plan must record make check verification." >&2
+  exit 1
+fi
+
 if ! grep -Fq "python3 -m unittest discover" "$ROOT_DIR/README.md" ||
   ! grep -Fq "kaggle_credentials.ini" "$ROOT_DIR/README.md" ||
   ! grep -Fq "requirements.txt" "$ROOT_DIR/README.md" ||
@@ -198,6 +217,11 @@ if ! grep -Fq "symlink members" "$ROOT_DIR/README.md"; then
   exit 1
 fi
 
+if ! grep -Fq "supplied credentials are normalized" "$ROOT_DIR/README.md"; then
+  printf '%s\n' "README must document direct credential validation." >&2
+  exit 1
+fi
+
 if ! grep -Fq "checked-in DSTL archive filename list" "$ROOT_DIR/SECURITY.md"; then
   printf '%s\n' "SECURITY must document DSTL archive filename enforcement." >&2
   exit 1
@@ -205,6 +229,11 @@ fi
 
 if ! grep -Fq "symlink members" "$ROOT_DIR/SECURITY.md"; then
   printf '%s\n' "SECURITY must document zip symlink member rejection." >&2
+  exit 1
+fi
+
+if ! grep -Fq "Supplied Kaggle credentials are normalized" "$ROOT_DIR/SECURITY.md"; then
+  printf '%s\n' "SECURITY must document direct credential validation." >&2
   exit 1
 fi
 
