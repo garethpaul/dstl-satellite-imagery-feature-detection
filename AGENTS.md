@@ -11,10 +11,12 @@
 - `docs` - plans, notes, and generated README assets
 - `tests` - tests and fixtures
 - `requirements.txt` - Python runtime dependencies
+- `requirements-dev.txt` - pinned verification dependencies
 
 ## Development commands
 
-- Install dependencies: `python3 -m pip install -r requirements.txt`
+- Supported runtime: Python 3.12
+- Install dependencies: `python3 -m pip install -r requirements.txt -r requirements-dev.txt`
 - Full baseline: `make check`
 - Combined verification: `make verify`
 - Lint/static checks: `make lint`
@@ -44,6 +46,8 @@
 
 - `kaggle_credentials.ini` is required only for live downloads and is ignored by git.
 - Downloaded `.zip` archives and extracted imagery should stay outside commits.
+- Preserve the configurable download, expanded-size, and archive-member limits
+  when changing the downloader or extraction flow.
 - HTTPS download URLs are enforced before credentials are posted, and live download URLs must use Kaggle hosts without embedded URL credentials.
 - File-loaded and supplied credentials are normalized before any request is posted, and blank credentials are rejected.
 - Live download filenames must match the checked-in DSTL archive list.

@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-06-10
+
+- Bound download bytes, expanded archive bytes, and archive member counts.
+- Pin runtime and verification dependencies and add Ruff and dependency audit checks.
+- Add a least-privilege Python 3.12 GitHub Actions verification workflow using
+  current Node 24-based actions.
+- Expand offline regression coverage for resource-limit failures and cleanup.
+
 ## 2026-06-09
 
 - Rejected disabled, non-positive, and non-finite download timeout values before
