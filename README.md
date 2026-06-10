@@ -58,6 +58,9 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 - Downloads default to a 25 GiB maximum, while extraction defaults to 100 GiB
   and 100,000 archive members. Callers may supply different positive integer
   limits when working with known datasets.
+- Cached downloads are reused only when the destination is a regular
+  non-symlink file, and partial downloads are created exclusively so a
+  concurrently inserted path cannot be followed.
 - Create a local, untracked `kaggle_credentials.ini` beside `utils.py` before
   running live downloads:
 
@@ -111,6 +114,9 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - Downloads reject declared or streamed content over the configured byte
   limit, and extraction rejects archives over the configured expanded-size or
   member-count limits before writing members.
+- Existing download destinations must be regular non-symlink files. Partial
+  files use exclusive creation and are removed when a stream or path race
+  fails.
 
 ## Security and Privacy Notes
 
@@ -140,6 +146,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   timeout validation before requests.
 - See `docs/plans/2026-06-10-dstl-resource-and-ci-limits.md` for resource
   limits, pinned verification tooling, and the GitHub Actions gate.
+- See `docs/plans/2026-06-10-dstl-download-path-boundary.md` for cached-file
+  validation and exclusive partial-file creation.
 
 ## Contributing
 

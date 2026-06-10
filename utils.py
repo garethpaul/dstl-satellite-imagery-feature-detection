@@ -181,11 +181,14 @@ def download_url(
     filepath = os.path.join(output_dir, filename)
     partial_path = filepath + ".part"
 
-    if os.path.exists(filepath):
+    if os.path.lexists(filepath):
+        existing_mode = os.lstat(filepath).st_mode
+        if stat.S_ISLNK(existing_mode) or not stat.S_ISREG(existing_mode):
+            raise ValueError("Existing download path must be a regular non-symlink file.")
         logging.warning("File %s exists", filepath)
         return filepath
 
-    if os.path.exists(partial_path):
+    if os.path.lexists(partial_path):
         os.remove(partial_path)
 
     credentials = (
@@ -210,7 +213,11 @@ def download_url(
 
         logging.info("Load file %s", filename)
         downloaded_bytes = 0
-        with open(partial_path, "wb") as handle:
+        open_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            open_flags |= os.O_NOFOLLOW
+        partial_fd = os.open(partial_path, open_flags, 0o600)
+        with os.fdopen(partial_fd, "wb") as handle:
             for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                 if chunk:
                     downloaded_bytes += len(chunk)
@@ -219,7 +226,7 @@ def download_url(
                     handle.write(chunk)
         os.replace(partial_path, filepath)
     except Exception:
-        if os.path.exists(partial_path):
+        if os.path.lexists(partial_path):
             os.remove(partial_path)
         raise
     finally:

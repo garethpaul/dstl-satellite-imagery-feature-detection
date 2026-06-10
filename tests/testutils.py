@@ -30,8 +30,9 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, response):
+    def __init__(self, response, on_post=None):
         self.response = response
+        self.on_post = on_post
         self.calls = []
 
     def post(self, url, data=None, stream=False, timeout=None):
@@ -43,6 +44,8 @@ class FakeSession:
                 "timeout": timeout,
             }
         )
+        if self.on_post:
+            self.on_post()
         return self.response
 
 
@@ -267,6 +270,54 @@ class DatasetLoadTest(unittest.TestCase):
                 )
 
         self.assertEqual([], session.calls)
+
+    def test_download_rejects_existing_symlink_cache_before_request(self):
+        response = FakeResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outside_path = os.path.join(tmpdir, "outside.zip")
+            with open(outside_path, "wb") as handle:
+                handle.write(b"outside")
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+            os.symlink(outside_path, filepath)
+
+            with self.assertRaisesRegex(ValueError, "regular non-symlink"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            self.assertEqual([], session.calls)
+            self.assertTrue(os.path.islink(filepath))
+
+    def test_download_exclusively_creates_partial_file(self):
+        response = FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outside_path = os.path.join(tmpdir, "outside.zip")
+            with open(outside_path, "wb") as handle:
+                handle.write(b"outside")
+            partial_path = os.path.join(tmpdir, "sample_submission.csv.zip.part")
+            session = FakeSession(
+                response,
+                on_post=lambda: os.symlink(outside_path, partial_path),
+            )
+
+            with self.assertRaises(FileExistsError):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            with open(outside_path, "rb") as handle:
+                self.assertEqual(b"outside", handle.read())
+            self.assertFalse(os.path.lexists(partial_path))
+            self.assertTrue(response.closed)
 
     def test_unzip_rejects_path_traversal(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -11,6 +11,7 @@ DIRECT_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-direct-credential-v
 URL_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-url-credential-guard.md"
 TIMEOUT_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-timeout-validation.md"
 RESOURCE_PLAN="$ROOT_DIR/docs/plans/2026-06-10-dstl-resource-and-ci-limits.md"
+DOWNLOAD_PATH_PLAN="$ROOT_DIR/docs/plans/2026-06-10-dstl-download-path-boundary.md"
 
 require_file() {
   path=$1
@@ -42,9 +43,29 @@ for path in \
   "docs/plans/2026-06-09-dstl-https-download-guard.md" \
   "docs/plans/2026-06-09-dstl-zip-symlink-guard.md" \
   "docs/plans/2026-06-10-dstl-resource-and-ci-limits.md" \
+  "docs/plans/2026-06-10-dstl-download-path-boundary.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
+
+for download_path_contract in \
+  "os.path.lexists(filepath)" \
+  "os.path.lexists(partial_path)" \
+  "os.lstat(filepath).st_mode" \
+  "os.O_EXCL" \
+  "test_download_rejects_existing_symlink_cache_before_request" \
+  "test_download_exclusively_creates_partial_file"; do
+  if ! grep -Fq "$download_path_contract" "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"; then
+    printf '%s\n' "Download-path contract is missing: $download_path_contract" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fq "Status: Completed" "$DOWNLOAD_PATH_PLAN" ||
+  ! grep -Fq 'make check' "$DOWNLOAD_PATH_PLAN"; then
+  printf '%s\n' "Download-path plan must remain completed with verification recorded." >&2
+  exit 1
+fi
 
 for make_contract in \
   '$(PYTHON) -m ruff format --check .' \

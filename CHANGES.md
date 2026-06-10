@@ -2,6 +2,11 @@
 
 ## 2026-06-10
 
+- Require cached download destinations to be regular non-symlink files before
+  treating them as successful archives.
+- Create partial downloads exclusively and fail closed if another filesystem
+  entry appears after stale-part cleanup.
+- Add offline regressions for cached symlinks and partial-file insertion races.
 - Bound download bytes, expanded archive bytes, and archive member counts.
 - Preflight every archive member and reject existing destination symlinks before
   extraction starts, preventing partial writes and redirected output.

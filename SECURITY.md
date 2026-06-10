@@ -46,7 +46,8 @@ are posted. Zip extraction preflights every member before writing files and
 rejects path traversal, archive symlink members, and existing symlinks in the
 destination path. GitHub Actions runs the full verification gate on Python
 3.10, 3.12, and 3.14 with read-only repository permissions and a bounded
-runtime.
+runtime. Cached downloads must be regular non-symlink files, and new partial
+downloads are created exclusively to reject concurrent path replacement.
 
 ## Dependency and Supply Chain Security
 
