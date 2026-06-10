@@ -42,8 +42,11 @@ or posted. Download URLs with embedded URL credentials are rejected before local
 Kaggle credentials are loaded. Download requests must use a positive finite timeout
 value or `(connect, read)` pair before requests are posted.
 Supplied Kaggle credentials are normalized and rejected when blank before requests
-are posted. Zip extraction rejects path traversal and symlink members before
-writing files.
+are posted. Zip extraction preflights every member before writing files and
+rejects path traversal, archive symlink members, and existing symlinks in the
+destination path. GitHub Actions runs the full verification gate on Python
+3.10, 3.12, and 3.14 with read-only repository permissions and a bounded
+runtime.
 
 ## Dependency and Supply Chain Security
 

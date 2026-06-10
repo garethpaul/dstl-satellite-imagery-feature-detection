@@ -10,6 +10,7 @@ SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-zip-symlink-guard.md"
 DIRECT_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-direct-credential-validation.md"
 URL_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-url-credential-guard.md"
 TIMEOUT_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-timeout-validation.md"
+RESOURCE_PLAN="$ROOT_DIR/docs/plans/2026-06-10-dstl-resource-and-ci-limits.md"
 
 require_file() {
   path=$1
@@ -25,6 +26,9 @@ for path in \
   "SECURITY.md" \
   "VISION.md" \
   "requirements.txt" \
+  "requirements-dev.txt" \
+  "pyproject.toml" \
+  ".github/workflows/check.yml" \
   "utils.py" \
   "tests/testutils.py" \
   "docs/plans/2026-06-08-dstl-check-wrapper.md" \
@@ -37,8 +41,68 @@ for path in \
   "docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md" \
   "docs/plans/2026-06-09-dstl-https-download-guard.md" \
   "docs/plans/2026-06-09-dstl-zip-symlink-guard.md" \
+  "docs/plans/2026-06-10-dstl-resource-and-ci-limits.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
+done
+
+for make_contract in \
+  '$(PYTHON) -m ruff format --check .' \
+  '$(PYTHON) -m ruff check .' \
+  '$(PYTHON) -m pip_audit -r requirements.txt -r requirements-dev.txt'; do
+  if ! grep -Fq "$make_contract" "$ROOT_DIR/Makefile"; then
+    printf '%s\n' "Makefile verification contract is missing: $make_contract" >&2
+    exit 1
+  fi
+done
+
+for dependency_contract in \
+  "requests==2.34.2" \
+  "pip-audit==2.10.0" \
+  "ruff==0.15.15"; do
+  if ! grep -Fq "$dependency_contract" "$ROOT_DIR/requirements.txt" "$ROOT_DIR/requirements-dev.txt"; then
+    printf '%s\n' "Dependency contract is missing: $dependency_contract" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fq "Status: Completed" "$RESOURCE_PLAN" ||
+  ! grep -Fq 'make check' "$RESOURCE_PLAN"; then
+  printf '%s\n' "Resource and CI plan must remain completed with verification recorded." >&2
+  exit 1
+fi
+
+WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
+for workflow_contract in \
+  "permissions:" \
+  "contents: read" \
+  "workflow_dispatch:" \
+  "cancel-in-progress: true" \
+  "timeout-minutes: 10" \
+  "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10" \
+  "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" \
+  'python-version: ["3.10", "3.12", "3.14"]' \
+  'python-version: ${{ matrix.python-version }}' \
+  "run: make check"; do
+  if ! grep -Fq "$workflow_contract" "$WORKFLOW"; then
+    printf '%s\n' "GitHub Actions workflow must keep contract: $workflow_contract" >&2
+    exit 1
+  fi
+done
+
+for resource_contract in \
+  "DEFAULT_MAX_DOWNLOAD_BYTES" \
+  "DEFAULT_MAX_EXTRACTED_BYTES" \
+  "DEFAULT_MAX_ARCHIVE_MEMBERS" \
+  "test_download_rejects_stream_over_limit_and_removes_partial_file" \
+  "test_unzip_rejects_extracted_size_over_limit" \
+  "test_unzip_rejects_archive_member_count_over_limit" \
+  "test_unzip_rejects_existing_symlink_in_destination_path" \
+  "test_unzip_preflights_all_members_before_writing"; do
+  if ! grep -Fq "$resource_contract" "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"; then
+    printf '%s\n' "Resource-limit contract is missing: $resource_contract" >&2
+    exit 1
+  fi
 done
 
 python3 -m py_compile "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"

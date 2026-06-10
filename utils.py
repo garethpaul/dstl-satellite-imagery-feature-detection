@@ -24,6 +24,9 @@ DATA_FILES = [
 ALLOWED_DATA_FILES = set(DATA_FILES)
 DEFAULT_TIMEOUT = (10, 60)
 CHUNK_SIZE = 1024 * 1024
+DEFAULT_MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024 * 1024
+DEFAULT_MAX_EXTRACTED_BYTES = 100 * 1024 * 1024 * 1024
+DEFAULT_MAX_ARCHIVE_MEMBERS = 100_000
 ALLOWED_DOWNLOAD_HOSTS = {"kaggle.com", "www.kaggle.com"}
 
 
@@ -62,7 +65,9 @@ def normalize_credentials(credentials):
         login = credentials["UserName"].strip()
         password = credentials["Password"].strip()
     except (KeyError, AttributeError) as exc:
-        raise KaggleCredentialsError("Kaggle credentials must include UserName and Password.") from exc
+        raise KaggleCredentialsError(
+            "Kaggle credentials must include UserName and Password."
+        ) from exc
 
     if not login or not password:
         raise KaggleCredentialsError("Kaggle login and password must not be empty.")
@@ -93,7 +98,20 @@ def normalize_timeout(timeout):
     raise ValueError("Download timeout must be a positive number or (connect, read) pair.")
 
 
-def load_and_unzip_data(output_dir=None, credentials_file=None, timeout=DEFAULT_TIMEOUT):
+def normalize_positive_integer(value, label):
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    raise ValueError(f"{label} must be a positive integer.")
+
+
+def load_and_unzip_data(
+    output_dir=None,
+    credentials_file=None,
+    timeout=DEFAULT_TIMEOUT,
+    max_download_bytes=DEFAULT_MAX_DOWNLOAD_BYTES,
+    max_extracted_bytes=DEFAULT_MAX_EXTRACTED_BYTES,
+    max_archive_members=DEFAULT_MAX_ARCHIVE_MEMBERS,
+):
     output_dir = output_dir or os.getcwd()
     credentials = load_credentials(credentials_file)
 
@@ -104,12 +122,18 @@ def load_and_unzip_data(output_dir=None, credentials_file=None, timeout=DEFAULT_
             output_dir=output_dir,
             credentials=credentials,
             timeout=timeout,
+            max_download_bytes=max_download_bytes,
         )
 
     logging.info("Extracting files")
     for filename in DATA_FILES:
         if filename.endswith(".zip"):
-            unzip(os.path.join(output_dir, filename), output_dir=output_dir)
+            unzip(
+                os.path.join(output_dir, filename),
+                output_dir=output_dir,
+                max_extracted_bytes=max_extracted_bytes,
+                max_archive_members=max_archive_members,
+            )
 
 
 def filename_from_url(url):
@@ -143,9 +167,11 @@ def download_url(
     session=None,
     credentials=None,
     credentials_file=None,
+    max_download_bytes=DEFAULT_MAX_DOWNLOAD_BYTES,
 ):
     require_https_url(url)
     timeout = normalize_timeout(timeout)
+    max_download_bytes = normalize_positive_integer(max_download_bytes, "Maximum download size")
 
     output_dir = output_dir or os.getcwd()
     os.makedirs(output_dir, exist_ok=True)
@@ -173,10 +199,23 @@ def download_url(
     try:
         response.raise_for_status()
 
+        content_length = response.headers.get("Content-Length")
+        if content_length is not None:
+            try:
+                declared_size = int(content_length)
+            except ValueError as exc:
+                raise ValueError("Download Content-Length must be an integer.") from exc
+            if declared_size < 0 or declared_size > max_download_bytes:
+                raise ValueError("Download exceeds the configured size limit.")
+
         logging.info("Load file %s", filename)
+        downloaded_bytes = 0
         with open(partial_path, "wb") as handle:
             for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                 if chunk:
+                    downloaded_bytes += len(chunk)
+                    if downloaded_bytes > max_download_bytes:
+                        raise ValueError("Download exceeds the configured size limit.")
                     handle.write(chunk)
         os.replace(partial_path, filepath)
     except Exception:
@@ -193,24 +232,60 @@ def download_url(
     return filepath
 
 
-def safe_zip_members(zip_ref, output_dir):
-    output_root = os.path.abspath(output_dir)
+def safe_zip_members(
+    zip_ref,
+    output_dir,
+    max_extracted_bytes=DEFAULT_MAX_EXTRACTED_BYTES,
+    max_archive_members=DEFAULT_MAX_ARCHIVE_MEMBERS,
+):
+    output_root = os.path.realpath(output_dir)
+    max_extracted_bytes = normalize_positive_integer(max_extracted_bytes, "Maximum extracted size")
+    max_archive_members = normalize_positive_integer(
+        max_archive_members, "Maximum archive member count"
+    )
+    members = zip_ref.infolist()
 
-    for member in zip_ref.infolist():
+    if len(members) > max_archive_members:
+        raise ValueError("Zip archive exceeds the configured member limit.")
+
+    total_size = sum(member.file_size for member in members)
+    if total_size > max_extracted_bytes:
+        raise ValueError("Zip archive exceeds the configured extracted size limit.")
+
+    for member in members:
         if stat.S_ISLNK(member.external_attr >> 16):
             raise ValueError("Refusing to extract zip symlink member.")
         target_path = os.path.abspath(os.path.join(output_root, member.filename))
-        if target_path != output_root and not target_path.startswith(output_root + os.sep):
+        if os.path.commonpath((output_root, target_path)) != output_root:
             raise ValueError("Refusing to extract zip member outside output directory.")
+
+        current_path = output_root
+        for part in os.path.relpath(target_path, output_root).split(os.sep):
+            current_path = os.path.join(current_path, part)
+            if os.path.islink(current_path):
+                raise ValueError("Refusing to extract through an existing symlink.")
         yield member
 
 
-def unzip(filename, output_dir=None):
+def unzip(
+    filename,
+    output_dir=None,
+    max_extracted_bytes=DEFAULT_MAX_EXTRACTED_BYTES,
+    max_archive_members=DEFAULT_MAX_ARCHIVE_MEMBERS,
+):
     output_dir = output_dir or os.getcwd()
     logging.info("Extracting file: %s", filename)
 
     with zipfile.ZipFile(filename, "r") as zip_ref:
-        for member in safe_zip_members(zip_ref, output_dir):
+        members = list(
+            safe_zip_members(
+                zip_ref,
+                output_dir,
+                max_extracted_bytes=max_extracted_bytes,
+                max_archive_members=max_archive_members,
+            )
+        )
+        for member in members:
             zip_ref.extract(member, output_dir)
 
 

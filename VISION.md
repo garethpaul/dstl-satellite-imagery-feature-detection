@@ -33,8 +33,8 @@ Current baseline:
   pairs before live requests are posted.
 - Default tests use fake HTTP responses and temporary zip files instead of live
   Kaggle credentials or downloads.
-- Zip extraction validates member paths and rejects symlink members before
-  writing files.
+- Zip extraction preflights all member paths and rejects archive or destination
+  symlink traversal before writing files.
 
 Next priorities:
 

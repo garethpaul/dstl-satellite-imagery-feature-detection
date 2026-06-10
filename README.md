@@ -30,8 +30,9 @@ Additional scan context:
 ### Prerequisites
 
 - Git
-- Python 3
-- `requests` from `requirements.txt`
+- Python 3.10 or newer (CI covers Python 3.10, 3.12, and 3.14)
+- Runtime and verification dependencies from `requirements.txt` and
+  `requirements-dev.txt`
 
 ### Setup
 
@@ -39,6 +40,7 @@ Additional scan context:
 git clone https://github.com/garethpaul/dstl-satellite-imagery-feature-detection.git
 cd dstl-satellite-imagery-feature-detection
 python3 -m pip install -r requirements.txt
+python3 -m pip install -r requirements-dev.txt
 ```
 
 The setup commands above are derived from repository files. Legacy mobile, Python, or JavaScript samples may require older SDKs or package versions than a modern workstation uses by default.
@@ -53,6 +55,9 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
   disabled or invalid timeouts are rejected before requests are posted.
 - Downloader helpers only accept filenames from the checked-in DSTL archive
   list before Kaggle credentials are loaded or posted.
+- Downloads default to a 25 GiB maximum, while extraction defaults to 100 GiB
+  and 100,000 archive members. Callers may supply different positive integer
+  limits when working with known datasets.
 - Create a local, untracked `kaggle_credentials.ini` beside `utils.py` before
   running live downloads:
 
@@ -78,10 +83,13 @@ make build
 python3 -m py_compile utils.py tests/testutils.py
 ```
 
-`make check` runs the source baseline and offline unittest discovery. Default
-tests use fake HTTP responses and temporary files. They do not require Kaggle
+`make check` runs the source baseline, Ruff formatting and lint checks, 22
+offline unit tests, bytecode compilation, and a `pip-audit` scan of declared
+dependencies. Default tests use
+fake HTTP responses and temporary files. They do not require Kaggle
 credentials, live network access, downloaded archives, or extracted imagery.
-The baseline also compiles the Python loader and tests through `make build`.
+GitHub Actions runs the same gate on Python 3.10, 3.12, and 3.14 for pushes,
+pull requests, and manual dispatches.
 
 When the required SDK or runtime is unavailable, use static checks and source review first, then verify on a machine that has the matching platform toolchain.
 
@@ -97,8 +105,12 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - File-loaded and supplied credentials are normalized before any request is
   posted, and blank credentials are rejected.
 - Live download filenames must match the checked-in DSTL archive list.
-- Zip extraction rejects path traversal and symlink members before writing
-  files.
+- Zip extraction preflights every member before writing files and rejects path
+  traversal, archive symlink members, and existing symlinks in destination
+  paths.
+- Downloads reject declared or streamed content over the configured byte
+  limit, and extraction rejects archives over the configured expanded-size or
+  member-count limits before writing members.
 
 ## Security and Privacy Notes
 
@@ -126,6 +138,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   credential rejection before requests.
 - See `docs/plans/2026-06-09-dstl-timeout-validation.md` for positive finite
   timeout validation before requests.
+- See `docs/plans/2026-06-10-dstl-resource-and-ci-limits.md` for resource
+  limits, pinned verification tooling, and the GitHub Actions gate.
 
 ## Contributing
 

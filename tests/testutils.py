@@ -11,8 +11,9 @@ def kaggle_url(filename="sample_submission.csv.zip"):
 
 
 class FakeResponse:
-    def __init__(self, chunks=None):
+    def __init__(self, chunks=None, headers=None):
         self.chunks = chunks or [b"payload"]
+        self.headers = headers or {}
         self.status_checked = False
         self.closed = False
         self.chunk_size = None
@@ -188,6 +189,40 @@ class DatasetLoadTest(unittest.TestCase):
             self.assertFalse(os.path.exists(filepath))
             self.assertFalse(os.path.exists(filepath + ".part"))
 
+    def test_download_rejects_declared_size_over_limit(self):
+        response = FakeResponse(headers={"Content-Length": "11"})
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(ValueError, "size limit"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "pass"},
+                    max_download_bytes=10,
+                )
+
+            self.assertFalse(os.path.exists(os.path.join(tmpdir, "sample_submission.csv.zip.part")))
+            self.assertTrue(response.closed)
+
+    def test_download_rejects_stream_over_limit_and_removes_partial_file(self):
+        response = FakeResponse([b"12345", b"67890", b"x"])
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(ValueError, "size limit"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "pass"},
+                    max_download_bytes=10,
+                )
+
+            self.assertFalse(os.path.exists(os.path.join(tmpdir, "sample_submission.csv.zip.part")))
+            self.assertTrue(response.closed)
+
         self.assertTrue(response.status_checked)
         self.assertTrue(response.closed)
 
@@ -258,6 +293,37 @@ class DatasetLoadTest(unittest.TestCase):
 
             self.assertFalse(os.path.lexists(os.path.join(tmpdir, "link")))
 
+    def test_unzip_rejects_existing_symlink_in_destination_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            outside_dir = os.path.join(tmpdir, "outside")
+            os.makedirs(output_dir)
+            os.makedirs(outside_dir)
+            os.symlink(outside_dir, os.path.join(output_dir, "nested"))
+
+            archive = os.path.join(tmpdir, "symlink-path.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("nested/file.txt", "bad")
+
+            with self.assertRaisesRegex(ValueError, "existing symlink"):
+                utils.unzip(archive, output_dir=output_dir)
+
+            self.assertFalse(os.path.exists(os.path.join(outside_dir, "file.txt")))
+
+    def test_unzip_preflights_all_members_before_writing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            archive = os.path.join(tmpdir, "late-traversal.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("safe.txt", "safe")
+                zip_ref.writestr("../outside.txt", "bad")
+
+            with self.assertRaises(ValueError):
+                utils.unzip(archive, output_dir=output_dir)
+
+            self.assertFalse(os.path.exists(os.path.join(output_dir, "safe.txt")))
+            self.assertFalse(os.path.exists(os.path.join(tmpdir, "outside.txt")))
+
     def test_unzip_extracts_safe_members(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             archive = os.path.join(tmpdir, "safe.zip")
@@ -268,6 +334,29 @@ class DatasetLoadTest(unittest.TestCase):
 
             with open(os.path.join(tmpdir, "nested", "file.txt")) as handle:
                 self.assertEqual("ok", handle.read())
+
+    def test_unzip_rejects_extracted_size_over_limit(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive = os.path.join(tmpdir, "large.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("large.txt", "123456")
+
+            with self.assertRaisesRegex(ValueError, "extracted size limit"):
+                utils.unzip(archive, output_dir=tmpdir, max_extracted_bytes=5)
+
+            self.assertFalse(os.path.exists(os.path.join(tmpdir, "large.txt")))
+
+    def test_unzip_rejects_archive_member_count_over_limit(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive = os.path.join(tmpdir, "many.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("first.txt", "1")
+                zip_ref.writestr("second.txt", "2")
+
+            with self.assertRaisesRegex(ValueError, "member limit"):
+                utils.unzip(archive, output_dir=tmpdir, max_archive_members=1)
+
+            self.assertFalse(os.path.exists(os.path.join(tmpdir, "first.txt")))
 
 
 if __name__ == "__main__":
