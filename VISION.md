@@ -37,10 +37,15 @@ Current baseline:
   symlink traversal before writing files.
 - Download cache reuse rejects symlinks and non-regular paths, while partial
   files use exclusive creation to prevent path-following races.
+- Cached and newly streamed payloads must be non-empty ZIP archives before they
+  are reused or promoted to the final dataset path.
 
 Next priorities:
 
 - Replace password-based login flow with a maintained Kaggle API path
+- Constrain or remove redirect-based credential forwarding in the legacy login
+  flow
+- Close destination path races between archive preflight and extraction
 - Add optional integration tests for real Kaggle downloads behind an explicit
   opt-in flag
 - Define modeling or feature-detection scope before adding notebooks or scripts

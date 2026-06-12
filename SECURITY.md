@@ -48,6 +48,8 @@ destination path. GitHub Actions runs the full verification gate on Python
 3.10, 3.12, and 3.14 with read-only repository permissions and a bounded
 runtime. Cached downloads must be regular non-symlink files, and new partial
 downloads are created exclusively to reject concurrent path replacement.
+Cached and newly streamed payloads must also be non-empty ZIP archives before
+they are reused or atomically promoted.
 
 ## Dependency and Supply Chain Security
 

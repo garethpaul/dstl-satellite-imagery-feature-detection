@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-06-12
+
+- Reject invalid or empty cached ZIP files before loading credentials or
+  posting a request.
+- Validate completed partial downloads before atomic promotion, removing HTML,
+  corrupt, or empty payloads while preserving response closure.
+- Add offline regressions for invalid cached and streamed archive payloads.
+
 ## 2026-06-10
 
 - Require cached download destinations to be regular non-symlink files before

@@ -160,6 +160,15 @@ def require_allowed_data_file(filename):
         raise ValueError("Download filename must be in the configured DSTL data file list.")
 
 
+def require_valid_zip_file(path):
+    try:
+        with zipfile.ZipFile(path, "r") as zip_ref:
+            if not zip_ref.infolist():
+                raise ValueError("Downloaded file must be a non-empty ZIP archive.")
+    except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
+        raise ValueError("Downloaded file must be a valid ZIP archive.") from exc
+
+
 def download_url(
     url,
     output_dir=None,
@@ -185,6 +194,7 @@ def download_url(
         existing_mode = os.lstat(filepath).st_mode
         if stat.S_ISLNK(existing_mode) or not stat.S_ISREG(existing_mode):
             raise ValueError("Existing download path must be a regular non-symlink file.")
+        require_valid_zip_file(filepath)
         logging.warning("File %s exists", filepath)
         return filepath
 
@@ -224,6 +234,7 @@ def download_url(
                     if downloaded_bytes > max_download_bytes:
                         raise ValueError("Download exceeds the configured size limit.")
                     handle.write(chunk)
+        require_valid_zip_file(partial_path)
         os.replace(partial_path, filepath)
     except Exception:
         if os.path.lexists(partial_path):

@@ -59,8 +59,9 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
   and 100,000 archive members. Callers may supply different positive integer
   limits when working with known datasets.
 - Cached downloads are reused only when the destination is a regular
-  non-symlink file, and partial downloads are created exclusively so a
-  concurrently inserted path cannot be followed.
+  non-symlink file containing a non-empty ZIP archive. Newly streamed bodies
+  receive the same validation before atomic promotion, and partial downloads
+  are created exclusively so a concurrently inserted path cannot be followed.
 - Create a local, untracked `kaggle_credentials.ini` beside `utils.py` before
   running live downloads:
 
@@ -115,8 +116,9 @@ When the required SDK or runtime is unavailable, use static checks and source re
   limit, and extraction rejects archives over the configured expanded-size or
   member-count limits before writing members.
 - Existing download destinations must be regular non-symlink files. Partial
-  files use exclusive creation and are removed when a stream or path race
-  fails.
+  files use exclusive creation and are removed when a stream, payload check, or
+  path race fails. Cached and newly downloaded files must be non-empty ZIP
+  archives, preventing HTML login/error bodies from becoming reusable data.
 
 ## Security and Privacy Notes
 
@@ -148,6 +150,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   limits, pinned verification tooling, and the GitHub Actions gate.
 - See `docs/plans/2026-06-10-dstl-download-path-boundary.md` for cached-file
   validation and exclusive partial-file creation.
+- See `docs/plans/2026-06-12-dstl-download-payload-validation.md` for cached and
+  streamed ZIP payload validation.
 
 ## Contributing
 

@@ -12,6 +12,7 @@ URL_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-url-credential-guard.m
 TIMEOUT_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-timeout-validation.md"
 RESOURCE_PLAN="$ROOT_DIR/docs/plans/2026-06-10-dstl-resource-and-ci-limits.md"
 DOWNLOAD_PATH_PLAN="$ROOT_DIR/docs/plans/2026-06-10-dstl-download-path-boundary.md"
+PAYLOAD_PLAN="$ROOT_DIR/docs/plans/2026-06-12-dstl-download-payload-validation.md"
 
 require_file() {
   path=$1
@@ -44,9 +45,36 @@ for path in \
   "docs/plans/2026-06-09-dstl-zip-symlink-guard.md" \
   "docs/plans/2026-06-10-dstl-resource-and-ci-limits.md" \
   "docs/plans/2026-06-10-dstl-download-path-boundary.md" \
+  "docs/plans/2026-06-12-dstl-download-payload-validation.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
+
+for payload_contract in \
+  "def require_valid_zip_file(path):" \
+  "require_valid_zip_file(filepath)" \
+  "require_valid_zip_file(partial_path)" \
+  "test_download_rejects_invalid_cached_zip_before_credentials" \
+  "test_download_reuses_valid_cached_zip_before_credentials" \
+  "test_download_rejects_invalid_streamed_zip_and_removes_partial_file" \
+  "test_download_rejects_empty_streamed_zip"; do
+  if ! grep -Fq "$payload_contract" "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"; then
+    printf '%s\n' "Download payload contract is missing: $payload_contract" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fq "Status: Completed" "$PAYLOAD_PLAN" ||
+  ! grep -Fq 'make check' "$PAYLOAD_PLAN"; then
+  printf '%s\n' "Download payload plan must remain completed with verification recorded." >&2
+  exit 1
+fi
+
+if ! grep -Fq "non-empty ZIP archive" "$ROOT_DIR/README.md" ||
+  ! grep -Fq "non-empty ZIP archives" "$ROOT_DIR/SECURITY.md"; then
+  printf '%s\n' "README and SECURITY must document ZIP payload validation." >&2
+  exit 1
+fi
 
 for download_path_contract in \
   "os.path.lexists(filepath)" \

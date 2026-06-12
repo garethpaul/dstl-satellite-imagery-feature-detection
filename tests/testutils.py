@@ -1,3 +1,4 @@
+import io
 import os
 import tempfile
 import unittest
@@ -10,9 +11,23 @@ def kaggle_url(filename="sample_submission.csv.zip"):
     return utils.BASE_DOWNLOAD_URL + filename
 
 
+def zip_payload(content=b"payload"):
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, "w") as zip_ref:
+        zip_ref.writestr("payload.txt", content)
+    return payload.getvalue()
+
+
+def empty_zip_payload():
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, "w"):
+        pass
+    return payload.getvalue()
+
+
 class FakeResponse:
     def __init__(self, chunks=None, headers=None):
-        self.chunks = chunks or [b"payload"]
+        self.chunks = chunks or [zip_payload()]
         self.headers = headers or {}
         self.status_checked = False
         self.closed = False
@@ -64,7 +79,8 @@ class DatasetLoadTest(unittest.TestCase):
         )
 
     def test_download_uses_timeout_credentials_and_output_dir(self):
-        response = FakeResponse([b"abc", b"", b"123"])
+        payload = zip_payload(b"abc123")
+        response = FakeResponse([payload[:10], b"", payload[10:]])
         session = FakeSession(response)
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -78,7 +94,7 @@ class DatasetLoadTest(unittest.TestCase):
 
             self.assertEqual(os.path.join(tmpdir, "sample_submission.csv.zip"), filepath)
             with open(filepath, "rb") as handle:
-                self.assertEqual(b"abc123", handle.read())
+                self.assertEqual(payload, handle.read())
 
         self.assertTrue(response.status_checked)
         self.assertTrue(response.closed)
@@ -230,7 +246,8 @@ class DatasetLoadTest(unittest.TestCase):
         self.assertTrue(response.closed)
 
     def test_download_removes_stale_partial_file_before_retry(self):
-        response = FakeResponse([b"fresh"])
+        payload = zip_payload(b"fresh")
+        response = FakeResponse([payload])
         session = FakeSession(response)
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -246,8 +263,92 @@ class DatasetLoadTest(unittest.TestCase):
             )
 
             with open(filepath, "rb") as handle:
-                self.assertEqual(b"fresh", handle.read())
+                self.assertEqual(payload, handle.read())
             self.assertFalse(os.path.exists(filepath + ".part"))
+
+    def test_download_rejects_invalid_cached_zip_before_credentials(self):
+        response = FakeResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+            with open(filepath, "wb") as handle:
+                handle.write(b"not a zip")
+
+            with self.assertRaisesRegex(ValueError, "valid ZIP archive"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials_file=os.path.join(tmpdir, "missing.ini"),
+                )
+
+            with open(filepath, "rb") as handle:
+                self.assertEqual(b"not a zip", handle.read())
+
+        self.assertEqual([], session.calls)
+
+    def test_download_reuses_valid_cached_zip_before_credentials(self):
+        payload = zip_payload(b"cached")
+        response = FakeResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+            with open(filepath, "wb") as handle:
+                handle.write(payload)
+
+            with self.assertLogs(level="WARNING") as logs:
+                result = utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials_file=os.path.join(tmpdir, "missing.ini"),
+                )
+
+            self.assertEqual(filepath, result)
+            self.assertIn("exists", logs.output[0])
+            with open(filepath, "rb") as handle:
+                self.assertEqual(payload, handle.read())
+
+        self.assertEqual([], session.calls)
+
+    def test_download_rejects_invalid_streamed_zip_and_removes_partial_file(self):
+        response = FakeResponse([b"<html>login required</html>"])
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+
+            with self.assertRaisesRegex(ValueError, "valid ZIP archive"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "pass"},
+                )
+
+            self.assertFalse(os.path.exists(filepath))
+            self.assertFalse(os.path.exists(filepath + ".part"))
+
+        self.assertTrue(response.closed)
+
+    def test_download_rejects_empty_streamed_zip(self):
+        response = FakeResponse([empty_zip_payload()])
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(ValueError, "non-empty ZIP archive"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "pass"},
+                )
+
+            self.assertFalse(os.path.exists(os.path.join(tmpdir, "sample_submission.csv.zip.part")))
+
+        self.assertTrue(response.closed)
 
     def test_missing_credentials_file_has_clear_error(self):
         with tempfile.TemporaryDirectory() as tmpdir:
