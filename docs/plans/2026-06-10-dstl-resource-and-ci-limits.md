@@ -30,10 +30,16 @@ quality gate reproducible on every change.
 
 ## Verification
 
-- `make check` (including an audit of both declared requirements files)
+- Python 3.12.8 and an isolated Python 3.14.0 environment: `make check` passed
+  all 28 tests, Ruff formatting and linting, bytecode compilation, and audits
+  of both declared requirements files with no known vulnerabilities.
 - Resource-limit regression tests cover declared download size, streamed
   download size and cleanup, expanded archive size, and archive member count.
 - Archive regressions cover destination symlinks and confirm a late invalid
   member is rejected before any earlier member is written.
-- The baseline script protects dependency, workflow, Makefile, and plan
-  contracts against accidental removal.
+- Six isolated hostile mutations were rejected: removing the download cap,
+  removing the archive-member cap, removing the HTTP timeout keyword, restoring
+  checkout credentials, adding workflow write permission, and marking this plan
+  incomplete.
+- Pull-request run `27393956956` passed the full gate on Python 3.10, 3.12, and
+  3.14 at exact head `d9a787eb09b3368485b4acc434ad77fe7e979a25`.
