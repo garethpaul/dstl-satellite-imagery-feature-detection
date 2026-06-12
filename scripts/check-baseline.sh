@@ -2,6 +2,7 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+PYTHON=${PYTHON:-python3}
 CHECK_PLAN="$ROOT_DIR/docs/plans/2026-06-08-dstl-check-wrapper.md"
 HTTPS_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-https-download-guard.md"
 HOST_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md"
@@ -13,6 +14,8 @@ TIMEOUT_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-timeout-validation.md"
 RESOURCE_PLAN="$ROOT_DIR/docs/plans/2026-06-10-dstl-resource-and-ci-limits.md"
 DOWNLOAD_PATH_PLAN="$ROOT_DIR/docs/plans/2026-06-10-dstl-download-path-boundary.md"
 PAYLOAD_PLAN="$ROOT_DIR/docs/plans/2026-06-12-dstl-download-payload-validation.md"
+WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
+AGENTS="$ROOT_DIR/AGENTS.md"
 
 require_file() {
   path=$1
@@ -96,9 +99,12 @@ if ! grep -Fq "Status: Completed" "$DOWNLOAD_PATH_PLAN" ||
 fi
 
 for make_contract in \
-  '$(PYTHON) -m ruff format --check .' \
-  '$(PYTHON) -m ruff check .' \
-  '$(PYTHON) -m pip_audit -r requirements.txt -r requirements-dev.txt'; do
+  'ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))' \
+  'PYTHON="$(PYTHON)" "$(ROOT)/scripts/check-baseline.sh"' \
+  'cd "$(ROOT)" && $(PYTHON) -m unittest discover -s tests -p "test*.py"' \
+  '$(PYTHON) -m ruff format --check "$(ROOT)"' \
+  '$(PYTHON) -m ruff check "$(ROOT)"' \
+  '$(PYTHON) -m pip_audit -r "$(ROOT)/requirements.txt" -r "$(ROOT)/requirements-dev.txt"'; do
   if ! grep -Fq "$make_contract" "$ROOT_DIR/Makefile"; then
     printf '%s\n' "Makefile verification contract is missing: $make_contract" >&2
     exit 1
@@ -121,15 +127,16 @@ if ! grep -Fq "Status: Completed" "$RESOURCE_PLAN" ||
   exit 1
 fi
 
-WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 for workflow_contract in \
   "permissions:" \
   "contents: read" \
   "workflow_dispatch:" \
   "cancel-in-progress: true" \
   "timeout-minutes: 10" \
+  "runs-on: ubuntu-24.04" \
   "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10" \
   "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" \
+  "persist-credentials: false" \
   'python-version: ["3.10", "3.12", "3.14"]' \
   'python-version: ${{ matrix.python-version }}' \
   "run: make check"; do
@@ -138,6 +145,61 @@ for workflow_contract in \
     exit 1
   fi
 done
+
+workflow_paths=$(find "$ROOT_DIR/.github/workflows" -type f \( -name '*.yml' -o -name '*.yaml' \) -print | LC_ALL=C sort)
+if [ "$workflow_paths" != "$WORKFLOW" ]; then
+  printf '%s\n' "The canonical check workflow must be the only GitHub Actions workflow." >&2
+  exit 1
+fi
+
+if [ "$(grep -Ec '^[[:space:]]*permissions:' "$WORKFLOW")" -ne 1 ] || \
+  grep -Eq 'write-all|contents:[[:space:]]*write|pull-requests:[[:space:]]*write|actions:[[:space:]]*write' "$WORKFLOW"; then
+  printf '%s\n' "GitHub Actions permissions must remain globally read-only." >&2
+  exit 1
+fi
+
+if [ "$(grep -Ec '^[[:space:]]*(-[[:space:]]+)?run:' "$WORKFLOW")" -ne 2 ] || \
+  grep -Eq 'continue-on-error:[[:space:]]*true|if:[[:space:]]*false' "$WORKFLOW"; then
+  printf '%s\n' "GitHub Actions must run exactly dependency installation and the full Make gate without bypasses." >&2
+  exit 1
+fi
+
+if ! grep -Fq "Supported runtime: Python 3.10 or newer; CI covers Python 3.10, 3.12, and 3.14." "$AGENTS"; then
+  printf '%s\n' "AGENTS.md must document the supported Python runtime and hosted matrix." >&2
+  exit 1
+fi
+
+"$PYTHON" - "$WORKFLOW" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
+checkout = "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10"
+setup_python = "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405"
+expected_actions = [checkout, setup_python]
+actions = re.findall(r"^\s*-?\s*uses:\s*([^\s#]+)", workflow, re.MULTILINE)
+
+if actions != expected_actions:
+    raise SystemExit("GitHub Actions must use exactly the two reviewed immutable action pins.")
+if re.search(r"^\s*-?\s*uses:\s*[^\s#]+@v[0-9]", workflow, re.MULTILINE):
+    raise SystemExit("GitHub Actions must not use release-tag action references.")
+if workflow.count("persist-credentials:") != 1 or "persist-credentials: true" in workflow:
+    raise SystemExit("Checkout credential persistence must be disabled exactly once.")
+
+checkout_contract = (
+    f"uses: {checkout} # v6.0.3\n"
+    "        with:\n"
+    "          persist-credentials: false"
+)
+if checkout_contract not in workflow:
+    raise SystemExit("Checkout must disable credential persistence in its own with block.")
+PY
+
+if grep -Fq 'ubuntu-latest' "$WORKFLOW"; then
+  printf '%s\n' "GitHub Actions must not use a floating Ubuntu runner." >&2
+  exit 1
+fi
 
 for resource_contract in \
   "DEFAULT_MAX_DOWNLOAD_BYTES" \
@@ -154,8 +216,8 @@ for resource_contract in \
   fi
 done
 
-python3 -m py_compile "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"
-python3 -m unittest discover -s "$ROOT_DIR/tests" -p "test*.py"
+"$PYTHON" -m py_compile "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"
+(cd "$ROOT_DIR" && "$PYTHON" -m unittest discover -s tests -p "test*.py")
 
 if ! grep -Fq "iter_content" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "CHUNK_SIZE" "$ROOT_DIR/utils.py" ||

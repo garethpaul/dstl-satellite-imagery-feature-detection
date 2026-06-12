@@ -1,19 +1,20 @@
 .PHONY: build lint test verify check
 
 PYTHON ?= python3
+ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
 lint:
-	./scripts/check-baseline.sh
-	$(PYTHON) -m ruff format --check .
-	$(PYTHON) -m ruff check .
+	PYTHON="$(PYTHON)" "$(ROOT)/scripts/check-baseline.sh"
+	$(PYTHON) -m ruff format --check "$(ROOT)"
+	$(PYTHON) -m ruff check "$(ROOT)"
 
 test:
-	$(PYTHON) -m unittest discover -s tests -p "test*.py"
+	cd "$(ROOT)" && $(PYTHON) -m unittest discover -s tests -p "test*.py"
 
 build:
-	$(PYTHON) -m py_compile utils.py tests/testutils.py
+	$(PYTHON) -m py_compile "$(ROOT)/utils.py" "$(ROOT)/tests/testutils.py"
 
 verify: lint test build
 
 check: verify
-	$(PYTHON) -m pip_audit -r requirements.txt -r requirements-dev.txt
+	$(PYTHON) -m pip_audit -r "$(ROOT)/requirements.txt" -r "$(ROOT)/requirements-dev.txt"

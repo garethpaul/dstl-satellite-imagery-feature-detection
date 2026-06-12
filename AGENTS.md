@@ -15,7 +15,7 @@
 
 ## Development commands
 
-- Supported runtime: Python 3.12
+- Supported runtime: Python 3.10 or newer; CI covers Python 3.10, 3.12, and 3.14.
 - Install dependencies: `python3 -m pip install -r requirements.txt -r requirements-dev.txt`
 - Full baseline: `make check`
 - Combined verification: `make verify`

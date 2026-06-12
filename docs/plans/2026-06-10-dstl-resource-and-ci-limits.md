@@ -22,7 +22,11 @@ quality gate reproducible on every change.
   and audit installed dependencies.
 - Run the full gate in a least-privilege Python 3.10, 3.12, and 3.14 GitHub
   Actions matrix with immutable current Node 24 action references, manual
-  dispatch, stale-run cancellation, and a job timeout.
+  dispatch, stale-run cancellation, a pinned Ubuntu runner, disabled checkout
+  credential persistence, and a job timeout.
+- Resolve all Makefile paths from the repository so the gate behaves the same
+  when invoked through `make -f` from another working directory.
+- Restrict the workflow to the two reviewed immutable action references.
 
 ## Verification
 

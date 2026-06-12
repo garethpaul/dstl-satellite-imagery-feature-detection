@@ -7,6 +7,12 @@
 - Validate completed partial downloads before atomic promotion, removing HTML,
   corrupt, or empty payloads while preserving response closure.
 - Add offline regressions for invalid cached and streamed archive payloads.
+- Disable checkout credential persistence, pin the Ubuntu runner, and make the
+  complete verification gate independent of the caller's working directory.
+- Propagate the selected Python interpreter into the baseline script and run
+  unittest discovery from the repository root.
+- Reject extra or release-tagged workflow actions outside the two reviewed
+  immutable action pins.
 
 ## 2026-06-10
 
