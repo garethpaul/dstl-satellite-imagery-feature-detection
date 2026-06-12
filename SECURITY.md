@@ -36,6 +36,21 @@ Helpful reports include:
 
 For web services, APIs, sockets, or scraping workflows, prioritize reports involving authentication bypass, authorization errors, injection, server-side request forgery, unsafe deserialization, credential leakage, data exposure, or denial-of-service conditions. Use test accounts and minimal proof-of-concept traffic only.
 
+Live DSTL downloads must stay restricted to HTTPS Kaggle hosts and filenames in
+the checked-in DSTL archive filename list before Kaggle credentials are loaded
+or posted. Download URLs with embedded URL credentials are rejected before local
+Kaggle credentials are loaded. Download requests must use a positive finite timeout
+value or `(connect, read)` pair before requests are posted.
+Supplied Kaggle credentials are normalized and rejected when blank before requests
+are posted. Zip extraction preflights every member before writing files and
+rejects path traversal, archive symlink members, and existing symlinks in the
+destination path. GitHub Actions runs the full verification gate on Python
+3.10, 3.12, and 3.14 with read-only repository permissions and a bounded
+runtime. Cached downloads must be regular non-symlink files, and new partial
+downloads are created exclusively to reject concurrent path replacement.
+Cached and newly streamed payloads must also be non-empty ZIP archives before
+they are reused or atomically promoted.
+
 ## Dependency and Supply Chain Security
 
 Dependency updates should come from trusted package managers and should keep lockfiles in sync when lockfiles exist. Do not commit credentials, private keys, tokens, generated secrets, or machine-local configuration. If a vulnerability depends on a compromised package, typosquatting risk, insecure transitive dependency, or unsafe build step, include the package name, affected version, and the path through which it is used.
