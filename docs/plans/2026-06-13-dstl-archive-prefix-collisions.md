@@ -1,6 +1,6 @@
 # Reject Archive File And Directory Prefix Collisions
 
-status: planned
+status: completed
 
 ## Context
 
@@ -46,3 +46,29 @@ member before descriptor-relative directory creation fails.
   regression coverage, documentation, and completed plan evidence.
 - Audit exact paths, dependency manifests, generated artifacts, and
   credential-like additions before committing.
+
+## Work Completed
+
+- Tracked normalized file targets separately from paths required to remain
+  directories during archive preflight.
+- Rejected file-first and descendant-first prefix collisions before opening
+  the extraction root or writing a destination member.
+- Added offline order regressions while preserving safe nested extraction,
+  exact target collision handling, resource limits, and no-follow extraction.
+- Added static and documentation contracts for the structural collision
+  boundary.
+
+## Verification Completed
+
+- Fresh isolated Python 3.12.8 and Python 3.14.0 environments passed dependency
+  integrity, all 35 offline tests, Ruff format/check, bytecode compilation, and
+  dependency audits with no known vulnerabilities.
+- `make check` passed in both isolated environments, and the rooted external
+  working-directory gate passed with Python 3.12.8.
+- Eight isolated hostile mutations were rejected across both collision orders,
+  preflight state, regression coverage, documentation, and completed plan
+  evidence.
+- Shell syntax, `git diff --check`, exact-path inspection, unchanged dependency
+  manifests, generated-artifact inspection, and credential-like addition
+  inspection passed.
+- Verification used no Kaggle credentials, downloaded no competition data, and made no live Kaggle request.

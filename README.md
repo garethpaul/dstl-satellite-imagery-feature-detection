@@ -111,7 +111,7 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - Live download filenames must match the checked-in DSTL archive list.
 - Zip extraction preflights every member before writing files and rejects path
   traversal, archive symlink members, existing symlinks in destination paths,
-  and members with colliding destination paths.
+  members with colliding destination paths, and file and directory prefix collisions.
 - Supported POSIX hosts use descriptor-rooted extraction with no-follow parent
   traversal, synced same-directory staging, and atomic replacement so a
   destination path swapped after preflight cannot redirect or partially publish

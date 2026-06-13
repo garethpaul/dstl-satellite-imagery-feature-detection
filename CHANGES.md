@@ -2,6 +2,8 @@
 
 ## 2026-06-13
 
+- Reject archive file and directory prefix collisions in either member order
+  before any destination file is written.
 - Closed archive destination path races with descriptor-rooted no-follow
   traversal, synced temporary files, atomic replacement, and failure cleanup.
 - Reject ZIP members whose normalized destination paths collide, before any

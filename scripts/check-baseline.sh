@@ -16,6 +16,7 @@ DOWNLOAD_PATH_PLAN="$ROOT_DIR/docs/plans/2026-06-10-dstl-download-path-boundary.
 PAYLOAD_PLAN="$ROOT_DIR/docs/plans/2026-06-12-dstl-download-payload-validation.md"
 TARGET_COLLISION_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-target-collisions.md"
 DESTINATION_RACE_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-destination-race.md"
+PREFIX_COLLISION_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-prefix-collisions.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -53,9 +54,16 @@ for path in \
   "docs/plans/2026-06-12-dstl-download-payload-validation.md" \
   "docs/plans/2026-06-13-dstl-archive-target-collisions.md" \
   "docs/plans/2026-06-13-dstl-archive-destination-race.md" \
+  "docs/plans/2026-06-13-dstl-archive-prefix-collisions.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
+
+SAFE_ZIP_MEMBERS=$(awk '
+  /^def safe_zip_members\(/ { capture = 1 }
+  capture && /^def / && $0 !~ /^def safe_zip_members\(/ { exit }
+  capture { print }
+' "$ROOT_DIR/utils.py")
 
 for payload_contract in \
   "def require_valid_zip_file(path):" \
@@ -289,6 +297,16 @@ if ! grep -Fq "seen_targets = set()" "$ROOT_DIR/utils.py" ||
   exit 1
 fi
 
+if [ "$(printf '%s\n' "$SAFE_ZIP_MEMBERS" | grep -Fc "file_targets = set()")" -ne 1 ] ||
+  [ "$(printf '%s\n' "$SAFE_ZIP_MEMBERS" | grep -Fc "required_directories = set()")" -ne 1 ] ||
+  [ "$(printf '%s\n' "$SAFE_ZIP_MEMBERS" | grep -Fc "file and directory prefix collisions")" -ne 2 ] ||
+  ! grep -Fq "test_unzip_rejects_file_directory_prefix_collisions_before_writing" "$ROOT_DIR/tests/testutils.py" ||
+  [ "$(grep -Fc '(("nested", "file"), ("nested/file.txt", "child"))' "$ROOT_DIR/tests/testutils.py")" -ne 1 ] ||
+  [ "$(grep -Fc '(("nested/file.txt", "child"), ("nested", "file"))' "$ROOT_DIR/tests/testutils.py")" -ne 1 ]; then
+  printf '%s\n' "Zip extraction must reject file and directory prefix collisions in either order." >&2
+  exit 1
+fi
+
 for extraction_contract in \
   "def require_secure_extraction_support" \
   "os.O_DIRECTORY | os.O_NOFOLLOW" \
@@ -319,6 +337,14 @@ if ! grep -Fq "status: completed" "$DESTINATION_RACE_PLAN" ||
   ! grep -Fq "hostile mutations were rejected" "$DESTINATION_RACE_PLAN" ||
   ! grep -Fq "no live Kaggle" "$DESTINATION_RACE_PLAN"; then
   printf '%s\n' "Archive destination race plan must record completed verification." >&2
+  exit 1
+fi
+
+if ! grep -Fq "status: completed" "$PREFIX_COLLISION_PLAN" ||
+  ! grep -Fq "make check" "$PREFIX_COLLISION_PLAN" ||
+  ! grep -Fq "hostile mutations were rejected" "$PREFIX_COLLISION_PLAN" ||
+  ! grep -Fq "no live Kaggle" "$PREFIX_COLLISION_PLAN"; then
+  printf '%s\n' "Archive prefix collision plan must record completed verification." >&2
   exit 1
 fi
 
@@ -496,6 +522,14 @@ fi
 if ! grep -Fq "colliding destination paths" "$ROOT_DIR/README.md" ||
   ! grep -Fq "colliding destination paths" "$ROOT_DIR/SECURITY.md"; then
   printf '%s\n' "README and SECURITY must document archive target collision rejection." >&2
+  exit 1
+fi
+
+if ! grep -Fq "file and directory prefix collisions" "$ROOT_DIR/README.md" ||
+  ! grep -Fq "file and directory prefix collisions" "$ROOT_DIR/SECURITY.md" ||
+  ! grep -Fq "file-directory prefix collisions" "$ROOT_DIR/VISION.md" ||
+  ! grep -Fq "file and directory prefix collisions" "$ROOT_DIR/CHANGES.md"; then
+  printf '%s\n' "Project guidance must document archive prefix collision rejection." >&2
   exit 1
 fi
 

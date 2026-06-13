@@ -489,6 +489,25 @@ class DatasetLoadTest(unittest.TestCase):
 
             self.assertFalse(os.path.exists(os.path.join(output_dir, "safe.txt")))
 
+    def test_unzip_rejects_file_directory_prefix_collisions_before_writing(self):
+        member_orders = (
+            (("nested", "file"), ("nested/file.txt", "child")),
+            (("nested/file.txt", "child"), ("nested", "file")),
+        )
+
+        for members in member_orders:
+            with self.subTest(members=members), tempfile.TemporaryDirectory() as tmpdir:
+                output_dir = os.path.join(tmpdir, "output")
+                archive = os.path.join(tmpdir, "prefix-collision.zip")
+                with zipfile.ZipFile(archive, "w") as zip_ref:
+                    for member_name, content in members:
+                        zip_ref.writestr(member_name, content)
+
+                with self.assertRaisesRegex(ValueError, "file and directory prefix collisions"):
+                    utils.unzip(archive, output_dir=output_dir)
+
+                self.assertFalse(os.path.exists(output_dir))
+
     def test_unzip_extracts_safe_members(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             archive = os.path.join(tmpdir, "safe.zip")
