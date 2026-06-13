@@ -15,6 +15,7 @@ RESOURCE_PLAN="$ROOT_DIR/docs/plans/2026-06-10-dstl-resource-and-ci-limits.md"
 DOWNLOAD_PATH_PLAN="$ROOT_DIR/docs/plans/2026-06-10-dstl-download-path-boundary.md"
 PAYLOAD_PLAN="$ROOT_DIR/docs/plans/2026-06-12-dstl-download-payload-validation.md"
 TARGET_COLLISION_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-target-collisions.md"
+DESTINATION_RACE_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-destination-race.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -51,6 +52,7 @@ for path in \
   "docs/plans/2026-06-10-dstl-download-path-boundary.md" \
   "docs/plans/2026-06-12-dstl-download-payload-validation.md" \
   "docs/plans/2026-06-13-dstl-archive-target-collisions.md" \
+  "docs/plans/2026-06-13-dstl-archive-destination-race.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -284,6 +286,48 @@ if ! grep -Fq "seen_targets = set()" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "colliding target paths" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "test_unzip_rejects_colliding_target_paths_before_writing" "$ROOT_DIR/tests/testutils.py"; then
   printf '%s\n' "Zip extraction must reject colliding normalized targets before writing files." >&2
+  exit 1
+fi
+
+for extraction_contract in \
+  "def require_secure_extraction_support" \
+  "os.O_DIRECTORY | os.O_NOFOLLOW" \
+  "def open_output_root" \
+  "def extract_zip_member" \
+  "os.O_EXCL | os.O_NOFOLLOW" \
+  "os.fsync(target.fileno())" \
+  "src_dir_fd=parent_fd" \
+  "os.unlink(temporary_name, dir_fd=parent_fd)" \
+  "test_unzip_rejects_destination_symlink_race" \
+  "test_unzip_securely_creates_missing_output_root" \
+  "test_unzip_atomically_replaces_existing_regular_file" \
+  "test_unzip_preserves_existing_file_when_replace_fails" \
+  "test_unzip_fails_closed_without_no_follow_support"; do
+  if ! grep -Fq "$extraction_contract" "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"; then
+    printf '%s\n' "Descriptor-rooted extraction contract is missing: $extraction_contract" >&2
+    exit 1
+  fi
+done
+
+if grep -Fq "zip_ref.extract(member, output_dir)" "$ROOT_DIR/utils.py"; then
+  printf '%s\n' "Zip extraction must not return to pathname-based ZipFile.extract." >&2
+  exit 1
+fi
+
+if ! grep -Fq "status: completed" "$DESTINATION_RACE_PLAN" ||
+  ! grep -Fq "Python 3.12.8 and Python 3.14.0" "$DESTINATION_RACE_PLAN" ||
+  ! grep -Fq "hostile mutations were rejected" "$DESTINATION_RACE_PLAN" ||
+  ! grep -Fq "no live Kaggle" "$DESTINATION_RACE_PLAN"; then
+  printf '%s\n' "Archive destination race plan must record completed verification." >&2
+  exit 1
+fi
+
+if ! grep -Fq "descriptor-rooted extraction" "$ROOT_DIR/README.md" ||
+  ! grep -Fq "descriptor-relative no-follow extraction" "$ROOT_DIR/SECURITY.md" ||
+  ! grep -Fq "Close destination path races with descriptor-rooted extraction" "$ROOT_DIR/VISION.md" ||
+  ! grep -Fq "descriptor-rooted archive extraction" "$AGENTS" ||
+  ! grep -Fq "Closed archive destination path races" "$ROOT_DIR/CHANGES.md"; then
+  printf '%s\n' "Project guidance must document descriptor-rooted archive extraction." >&2
   exit 1
 fi
 

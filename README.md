@@ -112,6 +112,10 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - Zip extraction preflights every member before writing files and rejects path
   traversal, archive symlink members, existing symlinks in destination paths,
   and members with colliding destination paths.
+- Supported POSIX hosts use descriptor-rooted extraction with no-follow parent
+  traversal, synced same-directory staging, and atomic replacement so a
+  destination path swapped after preflight cannot redirect or partially publish
+  a member. Unsupported hosts fail closed instead of using pathname extraction.
 - Downloads reject declared or streamed content over the configured byte
   limit, and extraction rejects archives over the configured expanded-size or
   member-count limits before writing members.

@@ -473,7 +473,7 @@ class DatasetLoadTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 utils.unzip(archive, output_dir=output_dir)
 
-            self.assertFalse(os.path.exists(os.path.join(output_dir, "safe.txt")))
+            self.assertFalse(os.path.exists(output_dir))
             self.assertFalse(os.path.exists(os.path.join(tmpdir, "outside.txt")))
 
     def test_unzip_rejects_colliding_target_paths_before_writing(self):
@@ -499,6 +499,97 @@ class DatasetLoadTest(unittest.TestCase):
 
             with open(os.path.join(tmpdir, "nested", "file.txt")) as handle:
                 self.assertEqual("ok", handle.read())
+
+    def test_unzip_securely_creates_missing_output_root(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output", "nested-root")
+            archive = os.path.join(tmpdir, "safe.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("file.txt", "ok")
+
+            utils.unzip(archive, output_dir=output_dir)
+
+            with open(os.path.join(output_dir, "file.txt")) as handle:
+                self.assertEqual("ok", handle.read())
+
+    def test_unzip_rejects_destination_symlink_race(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            outside_dir = os.path.join(tmpdir, "outside")
+            nested_dir = os.path.join(output_dir, "nested")
+            os.makedirs(nested_dir)
+            os.makedirs(outside_dir)
+            archive = os.path.join(tmpdir, "raced.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("nested/file.txt", "blocked")
+
+            original_extract = utils.extract_zip_member
+
+            def race_destination(zip_ref, member, output_root, root_fd):
+                os.rmdir(nested_dir)
+                os.symlink(outside_dir, nested_dir)
+                return original_extract(zip_ref, member, output_root, root_fd)
+
+            utils.extract_zip_member = race_destination
+            try:
+                with self.assertRaisesRegex(ValueError, "raced destination path"):
+                    utils.unzip(archive, output_dir=output_dir)
+            finally:
+                utils.extract_zip_member = original_extract
+
+            self.assertFalse(os.path.exists(os.path.join(outside_dir, "file.txt")))
+
+    def test_unzip_atomically_replaces_existing_regular_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = os.path.join(tmpdir, "file.txt")
+            with open(output, "w", encoding="utf-8") as handle:
+                handle.write("old")
+            archive = os.path.join(tmpdir, "replacement.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("file.txt", "new")
+
+            utils.unzip(archive, output_dir=tmpdir)
+
+            with open(output, encoding="utf-8") as handle:
+                self.assertEqual("new", handle.read())
+            self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
+
+    def test_unzip_preserves_existing_file_when_replace_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = os.path.join(tmpdir, "file.txt")
+            with open(output, "w", encoding="utf-8") as handle:
+                handle.write("old")
+            archive = os.path.join(tmpdir, "replace-failure.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("file.txt", "new")
+
+            original_replace = utils.os.replace
+            utils.os.replace = lambda *args, **kwargs: (_ for _ in ()).throw(OSError("failed"))
+            try:
+                with self.assertRaisesRegex(OSError, "failed"):
+                    utils.unzip(archive, output_dir=tmpdir)
+            finally:
+                utils.os.replace = original_replace
+
+            with open(output, encoding="utf-8") as handle:
+                self.assertEqual("old", handle.read())
+            self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
+
+    def test_unzip_fails_closed_without_no_follow_support(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive = os.path.join(tmpdir, "safe.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("file.txt", "data")
+
+            original_no_follow = utils.os.O_NOFOLLOW
+            del utils.os.O_NOFOLLOW
+            try:
+                with self.assertRaisesRegex(RuntimeError, "descriptor-relative"):
+                    utils.unzip(archive, output_dir=tmpdir)
+            finally:
+                utils.os.O_NOFOLLOW = original_no_follow
+
+            self.assertFalse(os.path.exists(os.path.join(tmpdir, "file.txt")))
 
     def test_unzip_rejects_extracted_size_over_limit(self):
         with tempfile.TemporaryDirectory() as tmpdir:

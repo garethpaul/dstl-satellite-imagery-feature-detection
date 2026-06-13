@@ -2,6 +2,8 @@
 
 ## 2026-06-13
 
+- Closed archive destination path races with descriptor-rooted no-follow
+  traversal, synced temporary files, atomic replacement, and failure cleanup.
 - Reject ZIP members whose normalized destination paths collide, before any
   archive member is written.
 - Added offline regression and static contracts for alias-path collisions.

@@ -1,7 +1,9 @@
 import configparser
+import errno
 import logging
 import math
 import os
+import secrets
 import stat
 import zipfile
 from urllib.parse import parse_qs, urlparse
@@ -290,6 +292,121 @@ def safe_zip_members(
         yield member
 
 
+def require_secure_extraction_support():
+    if (
+        not hasattr(os, "O_DIRECTORY")
+        or not hasattr(os, "O_NOFOLLOW")
+        or os.open not in os.supports_dir_fd
+        or os.mkdir not in os.supports_dir_fd
+        or os.unlink not in os.supports_dir_fd
+        or os.rename not in os.supports_dir_fd
+    ):
+        raise RuntimeError("Secure descriptor-relative zip extraction is unavailable.")
+
+
+def open_extraction_directory(parent_fd, component):
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        return os.open(component, flags, dir_fd=parent_fd)
+    except FileNotFoundError:
+        try:
+            os.mkdir(component, mode=0o700, dir_fd=parent_fd)
+        except FileExistsError:
+            pass
+        try:
+            return os.open(component, flags, dir_fd=parent_fd)
+        except OSError as exc:
+            if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                raise ValueError("Refusing to extract through a raced destination path.") from exc
+            raise
+    except OSError as exc:
+        if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise ValueError("Refusing to extract through a raced destination path.") from exc
+        raise
+
+
+def member_path_parts(member, output_root):
+    target_path = os.path.abspath(os.path.join(output_root, member.filename))
+    relative_path = os.path.relpath(target_path, output_root)
+    return [part for part in relative_path.split(os.sep) if part not in ("", ".")]
+
+
+def open_member_parent(root_fd, parent_parts):
+    current_fd = os.dup(root_fd)
+    try:
+        for part in parent_parts:
+            child_fd = open_extraction_directory(current_fd, part)
+            os.close(current_fd)
+            current_fd = child_fd
+        return current_fd
+    except Exception:
+        os.close(current_fd)
+        raise
+
+
+def open_output_root(output_root):
+    if not os.path.isabs(output_root):
+        raise ValueError("Extraction output root must be absolute.")
+
+    filesystem_root_fd = os.open(
+        os.path.sep,
+        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+    )
+    try:
+        root_parts = [part for part in output_root.split(os.path.sep) if part]
+        return open_member_parent(filesystem_root_fd, root_parts)
+    finally:
+        os.close(filesystem_root_fd)
+
+
+def extract_zip_member(zip_ref, member, output_root, root_fd):
+    parts = member_path_parts(member, output_root)
+    if not parts:
+        return
+
+    if member.is_dir():
+        directory_fd = open_member_parent(root_fd, parts)
+        os.close(directory_fd)
+        return
+
+    parent_fd = open_member_parent(root_fd, parts[:-1])
+    temporary_name = ".{0}.{1}.part".format(parts[-1], secrets.token_hex(8))
+    temporary_fd = None
+    try:
+        temporary_fd = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=parent_fd,
+        )
+        with zip_ref.open(member, "r") as source, os.fdopen(temporary_fd, "wb") as target:
+            temporary_fd = None
+            while True:
+                chunk = source.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                target.write(chunk)
+            target.flush()
+            os.fsync(target.fileno())
+
+        os.replace(
+            temporary_name,
+            parts[-1],
+            src_dir_fd=parent_fd,
+            dst_dir_fd=parent_fd,
+        )
+        temporary_name = None
+    finally:
+        if temporary_fd is not None:
+            os.close(temporary_fd)
+        if temporary_name is not None:
+            try:
+                os.unlink(temporary_name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+        os.close(parent_fd)
+
+
 def unzip(
     filename,
     output_dir=None,
@@ -298,6 +415,8 @@ def unzip(
 ):
     output_dir = output_dir or os.getcwd()
     logging.info("Extracting file: %s", filename)
+    require_secure_extraction_support()
+    output_root = os.path.realpath(output_dir)
 
     with zipfile.ZipFile(filename, "r") as zip_ref:
         members = list(
@@ -308,8 +427,12 @@ def unzip(
                 max_archive_members=max_archive_members,
             )
         )
-        for member in members:
-            zip_ref.extract(member, output_dir)
+        root_fd = open_output_root(output_root)
+        try:
+            for member in members:
+                extract_zip_member(zip_ref, member, output_root, root_fd)
+        finally:
+            os.close(root_fd)
 
 
 if __name__ == "__main__":

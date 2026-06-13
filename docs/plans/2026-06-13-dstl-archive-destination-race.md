@@ -2,7 +2,7 @@
 title: DSTL Archive Destination Race Boundary
 type: security
 date: 2026-06-13
-status: planned
+status: completed
 ---
 
 # DSTL Archive Destination Race Boundary
@@ -58,8 +58,9 @@ preflight-to-write race.
 ## Key Technical Decisions
 
 - **Descriptor-rooted traversal:** Hold the output root and each parent directory
-  open while resolving member components, removing pathname re-resolution from
-  the write boundary.
+  open while resolving member components. Create a missing output root by
+  traversing from the filesystem root with the same no-follow descriptors,
+  removing pathname re-resolution from the write boundary.
 - **No-follow directories and files:** Require `O_NOFOLLOW`; treat symlink or
   non-directory races as extraction errors.
 - **Atomic per-file publication:** Generate an unpredictable hidden temporary
@@ -98,15 +99,22 @@ preflight-to-write race.
 
 ## Verification
 
-- Run focused extraction tests, Ruff format/check, bytecode compilation,
-  dependency audit, `make check`, and the rooted external-working-directory
-  wrapper on available supported Python versions.
-- Apply isolated mutations for restored `ZipFile.extract`, removed
-  `O_NOFOLLOW`, pathname replacement, omitted sync/cleanup, removed race and
-  preservation tests, documentation drift, and incomplete plan evidence.
-- Run shell syntax, whitespace, exact-path, secret-pattern, and artifact checks.
-- Do not use Kaggle credentials, download competition data, or make live
-  network requests.
+- Fresh pinned environments on Python 3.12.8 and Python 3.14.0 passed dependency
+  integrity, all 34 offline tests, Ruff format/check, bytecode compilation, and
+  dependency audit with no known vulnerabilities.
+- `make check` passed in both isolated runtimes, and the rooted
+  external-working-directory wrapper passed from `/tmp` with Python 3.12.8.
+- Ten hostile mutations were rejected for restored `ZipFile.extract`, removed
+  `O_NOFOLLOW`, omitted sync or cleanup, pathname replacement, removed race,
+  preservation, or capability regressions, documentation drift, and incomplete
+  plan evidence.
+- Shell syntax, `git diff --check`, exact-path inspection, secret-pattern
+  inspection, and generated-artifact inspection passed.
+- The pre-existing host Python environment had an unrelated
+  `virtualenv`/`platformdirs` conflict, so no result from that contaminated
+  environment is claimed.
+- Verification used no Kaggle credentials, downloaded no competition data, and
+  made no live Kaggle or other network request.
 
 ## Risks
 

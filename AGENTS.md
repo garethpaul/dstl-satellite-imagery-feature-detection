@@ -52,6 +52,9 @@
 - File-loaded and supplied credentials are normalized before any request is posted, and blank credentials are rejected.
 - Live download filenames must match the checked-in DSTL archive list.
 - Zip extraction rejects path traversal and symlink members before writing files.
+- Preserve descriptor-rooted archive extraction, no-follow directory traversal,
+  synced same-directory staging, and atomic replacement; unsupported platforms
+  must fail closed.
 
 ## Agent workflow
 
