@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-06-13
+
+- Reject ZIP members whose normalized destination paths collide, before any
+  archive member is written.
+- Added offline regression and static contracts for alias-path collisions.
+
 ## 2026-06-12
 
 - Reject invalid or empty cached ZIP files before loading credentials or

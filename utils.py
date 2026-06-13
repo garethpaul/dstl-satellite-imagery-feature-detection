@@ -270,12 +270,17 @@ def safe_zip_members(
     if total_size > max_extracted_bytes:
         raise ValueError("Zip archive exceeds the configured extracted size limit.")
 
+    seen_targets = set()
     for member in members:
         if stat.S_ISLNK(member.external_attr >> 16):
             raise ValueError("Refusing to extract zip symlink member.")
         target_path = os.path.abspath(os.path.join(output_root, member.filename))
         if os.path.commonpath((output_root, target_path)) != output_root:
             raise ValueError("Refusing to extract zip member outside output directory.")
+        target_key = os.path.normcase(target_path)
+        if target_key in seen_targets:
+            raise ValueError("Refusing to extract zip members with colliding target paths.")
+        seen_targets.add(target_key)
 
         current_path = output_root
         for part in os.path.relpath(target_path, output_root).split(os.sep):

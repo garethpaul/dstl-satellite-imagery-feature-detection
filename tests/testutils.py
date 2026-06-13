@@ -476,6 +476,19 @@ class DatasetLoadTest(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(output_dir, "safe.txt")))
             self.assertFalse(os.path.exists(os.path.join(tmpdir, "outside.txt")))
 
+    def test_unzip_rejects_colliding_target_paths_before_writing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            archive = os.path.join(tmpdir, "colliding-targets.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("safe.txt", "first")
+                zip_ref.writestr("./safe.txt", "second")
+
+            with self.assertRaisesRegex(ValueError, "colliding target paths"):
+                utils.unzip(archive, output_dir=output_dir)
+
+            self.assertFalse(os.path.exists(os.path.join(output_dir, "safe.txt")))
+
     def test_unzip_extracts_safe_members(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             archive = os.path.join(tmpdir, "safe.zip")

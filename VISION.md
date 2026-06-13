@@ -34,7 +34,7 @@ Current baseline:
 - Default tests use fake HTTP responses and temporary zip files instead of live
   Kaggle credentials or downloads.
 - Zip extraction preflights all member paths and rejects archive or destination
-  symlink traversal before writing files.
+  symlink traversal and colliding destination paths before writing files.
 - Download cache reuse rejects symlinks and non-regular paths, while partial
   files use exclusive creation to prevent path-following races.
 - Cached and newly streamed payloads must be non-empty ZIP archives before they

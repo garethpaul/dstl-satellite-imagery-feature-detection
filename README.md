@@ -87,7 +87,7 @@ make build
 python3 -m py_compile utils.py tests/testutils.py
 ```
 
-`make check` runs the source baseline, Ruff formatting and lint checks, 22
+`make check` runs the source baseline, Ruff formatting and lint checks, 29
 offline unit tests, bytecode compilation, and a `pip-audit` scan of declared
 dependencies. Default tests use
 fake HTTP responses and temporary files. They do not require Kaggle
@@ -110,8 +110,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   posted, and blank credentials are rejected.
 - Live download filenames must match the checked-in DSTL archive list.
 - Zip extraction preflights every member before writing files and rejects path
-  traversal, archive symlink members, and existing symlinks in destination
-  paths.
+  traversal, archive symlink members, existing symlinks in destination paths,
+  and members with colliding destination paths.
 - Downloads reject declared or streamed content over the configured byte
   limit, and extraction rejects archives over the configured expanded-size or
   member-count limits before writing members.
@@ -152,6 +152,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   validation and exclusive partial-file creation.
 - See `docs/plans/2026-06-12-dstl-download-payload-validation.md` for cached and
   streamed ZIP payload validation.
+- See `docs/plans/2026-06-13-dstl-archive-target-collisions.md` for normalized
+  archive destination uniqueness.
 
 ## Contributing
 

@@ -14,6 +14,7 @@ TIMEOUT_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-timeout-validation.md"
 RESOURCE_PLAN="$ROOT_DIR/docs/plans/2026-06-10-dstl-resource-and-ci-limits.md"
 DOWNLOAD_PATH_PLAN="$ROOT_DIR/docs/plans/2026-06-10-dstl-download-path-boundary.md"
 PAYLOAD_PLAN="$ROOT_DIR/docs/plans/2026-06-12-dstl-download-payload-validation.md"
+TARGET_COLLISION_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-target-collisions.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -49,6 +50,7 @@ for path in \
   "docs/plans/2026-06-10-dstl-resource-and-ci-limits.md" \
   "docs/plans/2026-06-10-dstl-download-path-boundary.md" \
   "docs/plans/2026-06-12-dstl-download-payload-validation.md" \
+  "docs/plans/2026-06-13-dstl-archive-target-collisions.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -70,6 +72,15 @@ done
 if ! grep -Fq "Status: Completed" "$PAYLOAD_PLAN" ||
   ! grep -Fq 'make check' "$PAYLOAD_PLAN"; then
   printf '%s\n' "Download payload plan must remain completed with verification recorded." >&2
+  exit 1
+fi
+
+if ! grep -Fq "status: completed" "$TARGET_COLLISION_PLAN" ||
+  ! grep -Fq "make check" "$TARGET_COLLISION_PLAN" ||
+  ! grep -Fq "Removing collision rejection failed" "$TARGET_COLLISION_PLAN" ||
+  ! grep -Fq "Removing platform case normalization failed" "$TARGET_COLLISION_PLAN" ||
+  ! grep -Fq "no known" "$TARGET_COLLISION_PLAN"; then
+  printf '%s\n' "Archive target collision plan must record completed verification." >&2
   exit 1
 fi
 
@@ -268,6 +279,14 @@ if ! grep -Fq "stat.S_ISLNK" "$ROOT_DIR/utils.py" ||
   exit 1
 fi
 
+if ! grep -Fq "seen_targets = set()" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "os.path.normcase(target_path)" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "colliding target paths" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "test_unzip_rejects_colliding_target_paths_before_writing" "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Zip extraction must reject colliding normalized targets before writing files." >&2
+  exit 1
+fi
+
 if ! grep -Fq "def normalize_credentials" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "normalize_credentials(credentials)" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "test_download_rejects_blank_supplied_credentials_before_request" "$ROOT_DIR/tests/testutils.py"; then
@@ -427,6 +446,12 @@ fi
 
 if ! grep -Fq "symlink members" "$ROOT_DIR/README.md"; then
   printf '%s\n' "README must document zip symlink member rejection." >&2
+  exit 1
+fi
+
+if ! grep -Fq "colliding destination paths" "$ROOT_DIR/README.md" ||
+  ! grep -Fq "colliding destination paths" "$ROOT_DIR/SECURITY.md"; then
+  printf '%s\n' "README and SECURITY must document archive target collision rejection." >&2
   exit 1
 fi
 
