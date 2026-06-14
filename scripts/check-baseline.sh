@@ -18,6 +18,7 @@ TARGET_COLLISION_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-target-colli
 DESTINATION_RACE_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-destination-race.md"
 PREFIX_COLLISION_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-prefix-collisions.md"
 EXISTING_TYPE_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-existing-target-types.md"
+MAKE_ROOT_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-make-root-override-protection.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -57,6 +58,7 @@ for path in \
   "docs/plans/2026-06-13-dstl-archive-destination-race.md" \
   "docs/plans/2026-06-13-dstl-archive-prefix-collisions.md" \
   "docs/plans/2026-06-14-dstl-existing-target-types.md" \
+  "docs/plans/2026-06-14-dstl-make-root-override-protection.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -122,7 +124,7 @@ if ! grep -Fq "Status: Completed" "$DOWNLOAD_PATH_PLAN" ||
 fi
 
 for make_contract in \
-  'ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))' \
+  'override ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))' \
   'PYTHON="$(PYTHON)" "$(ROOT)/scripts/check-baseline.sh"' \
   'cd "$(ROOT)" && $(PYTHON) -m unittest discover -s tests -p "test*.py"' \
   '$(PYTHON) -m ruff format --check "$(ROOT)"' \
@@ -130,6 +132,19 @@ for make_contract in \
   '$(PYTHON) -m pip_audit -r "$(ROOT)/requirements.txt" -r "$(ROOT)/requirements-dev.txt"'; do
   if ! grep -Fq "$make_contract" "$ROOT_DIR/Makefile"; then
     printf '%s\n' "Makefile verification contract is missing: $make_contract" >&2
+    exit 1
+  fi
+done
+
+for make_root_plan_contract in \
+  "status: completed" \
+  "## Status: Completed" \
+  "## Work Completed" \
+  "## Verification Completed" \
+  "no known vulnerabilities" \
+  "Three isolated hostile assignment mutations were rejected"; do
+  if ! grep -Fq "$make_root_plan_contract" "$MAKE_ROOT_PLAN"; then
+    printf '%s\n' "Make-root plan must record completed evidence: $make_root_plan_contract" >&2
     exit 1
   fi
 done

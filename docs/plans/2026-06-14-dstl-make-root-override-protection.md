@@ -1,13 +1,13 @@
 ---
 title: DSTL Make Repository Root Override Protection
 type: reliability
-status: active
+status: completed
 date: 2026-06-14
 ---
 
 # DSTL Make Repository Root Override Protection
 
-## Status: Active
+## Status: Completed
 
 ## Problem Frame
 
@@ -45,3 +45,22 @@ untracked `/tmp/scripts/check-baseline.sh` instead of the repository gate.
 - Python unit tests, Ruff format/check, compilation, and pip-audit
 - `git diff --check`
 - Isolated hostile assignment mutations
+
+## Work Completed
+
+- Protected the repository-derived Make root with GNU Make's `override`
+  directive while preserving `PYTHON` as a caller-selected interpreter.
+- Updated the existing Make contract and registered this plan in the
+  deterministic checker.
+- Preserved every downloader, archive, resource, and dependency behavior.
+
+## Verification Completed
+
+- `sh -n scripts/check-baseline.sh` and `make lint` passed.
+- `make check` passed from the repository and an external working directory.
+- Full checks passed with command-line and environment `ROOT=/tmp`
+  assignments while commands continued to use the checkout.
+- All 36 tests, Ruff format/check, source compilation, and pip-audit passed;
+  pip-audit reported no known vulnerabilities.
+- Three isolated hostile assignment mutations were rejected: a regular
+  assignment, a conditional assignment, and a caller-directory assignment.

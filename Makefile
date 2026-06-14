@@ -1,7 +1,7 @@
 .PHONY: build lint test verify check
 
 PYTHON ?= python3
-ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+override ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
 lint:
 	PYTHON="$(PYTHON)" "$(ROOT)/scripts/check-baseline.sh"
