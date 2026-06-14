@@ -311,10 +311,19 @@ def safe_zip_members(
             file_targets.add(target_key)
 
         current_path = output_root
-        for part in os.path.relpath(target_path, output_root).split(os.sep):
+        target_parts = os.path.relpath(target_path, output_root).split(os.sep)
+        for index, part in enumerate(target_parts):
             current_path = os.path.join(current_path, part)
             if os.path.islink(current_path):
                 raise ValueError("Refusing to extract through an existing symlink.")
+            if not os.path.lexists(current_path):
+                continue
+
+            must_be_directory = index < len(target_parts) - 1 or member.is_dir()
+            if must_be_directory != os.path.isdir(current_path):
+                raise ValueError(
+                    "Refusing to extract through an existing destination type collision."
+                )
         yield member
 
 

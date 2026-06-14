@@ -44,7 +44,8 @@ value or `(connect, read)` pair before requests are posted.
 Supplied Kaggle credentials are normalized and rejected when blank before requests
 are posted. Zip extraction preflights every member before writing files and
 rejects path traversal, archive symlink members, existing symlinks, and
-colliding destination paths, including file and directory prefix collisions.
+colliding destination paths, including file and directory prefix collisions,
+plus existing destination type collisions.
 The descriptor-relative no-follow extraction then
 holds verified parent directories open, syncs staged files, and atomically
 publishes members; unsupported platforms fail closed. GitHub Actions runs the full verification gate on Python

@@ -17,6 +17,7 @@ PAYLOAD_PLAN="$ROOT_DIR/docs/plans/2026-06-12-dstl-download-payload-validation.m
 TARGET_COLLISION_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-target-collisions.md"
 DESTINATION_RACE_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-destination-race.md"
 PREFIX_COLLISION_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-prefix-collisions.md"
+EXISTING_TYPE_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-existing-target-types.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -55,6 +56,7 @@ for path in \
   "docs/plans/2026-06-13-dstl-archive-target-collisions.md" \
   "docs/plans/2026-06-13-dstl-archive-destination-race.md" \
   "docs/plans/2026-06-13-dstl-archive-prefix-collisions.md" \
+  "docs/plans/2026-06-14-dstl-existing-target-types.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -307,6 +309,15 @@ if [ "$(printf '%s\n' "$SAFE_ZIP_MEMBERS" | grep -Fc "file_targets = set()")" -n
   exit 1
 fi
 
+if [ "$(printf '%s\n' "$SAFE_ZIP_MEMBERS" | grep -Fc "must_be_directory =")" -ne 1 ] ||
+  [ "$(printf '%s\n' "$SAFE_ZIP_MEMBERS" | grep -Fc "os.path.lexists(current_path)")" -ne 1 ] ||
+  [ "$(printf '%s\n' "$SAFE_ZIP_MEMBERS" | grep -Fc "destination type collision")" -ne 1 ] ||
+  ! grep -Fq "test_unzip_rejects_existing_destination_type_collisions_before_writing" "$ROOT_DIR/tests/testutils.py" ||
+  ! grep -Fq 'collisions = ("directory-at-file-target", "file-at-required-directory")' "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Zip extraction must preflight existing destination type collisions." >&2
+  exit 1
+fi
+
 for extraction_contract in \
   "def require_secure_extraction_support" \
   "os.O_DIRECTORY | os.O_NOFOLLOW" \
@@ -345,6 +356,14 @@ if ! grep -Fq "status: completed" "$PREFIX_COLLISION_PLAN" ||
   ! grep -Fq "hostile mutations were rejected" "$PREFIX_COLLISION_PLAN" ||
   ! grep -Fq "no live Kaggle" "$PREFIX_COLLISION_PLAN"; then
   printf '%s\n' "Archive prefix collision plan must record completed verification." >&2
+  exit 1
+fi
+
+
+if ! grep -Fq "status: completed" "$EXISTING_TYPE_PLAN" ||
+  ! grep -Fq "make check" "$EXISTING_TYPE_PLAN" ||
+  ! grep -Fq "hostile mutations" "$EXISTING_TYPE_PLAN"; then
+  printf '%s\n' "Existing destination type plan must record completed verification." >&2
   exit 1
 fi
 
@@ -530,6 +549,14 @@ if ! grep -Fq "file and directory prefix collisions" "$ROOT_DIR/README.md" ||
   ! grep -Fq "file-directory prefix collisions" "$ROOT_DIR/VISION.md" ||
   ! grep -Fq "file and directory prefix collisions" "$ROOT_DIR/CHANGES.md"; then
   printf '%s\n' "Project guidance must document archive prefix collision rejection." >&2
+  exit 1
+fi
+
+if ! grep -Fq "existing destination type collisions" "$ROOT_DIR/README.md" ||
+  ! grep -Fq "existing destination type collisions" "$ROOT_DIR/SECURITY.md" ||
+  ! grep -Fq "existing destination type collisions" "$ROOT_DIR/VISION.md" ||
+  ! grep -Fq "existing destination type collisions" "$ROOT_DIR/CHANGES.md"; then
+  printf '%s\n' "Project guidance must document existing destination type preflight." >&2
   exit 1
 fi
 

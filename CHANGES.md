@@ -1,5 +1,10 @@
 # Changes
 
+## 2026-06-14
+
+- Reject existing destination type collisions during archive preflight so a
+  later file/directory mismatch cannot leave earlier members written.
+
 ## 2026-06-13
 
 - Reject archive file and directory prefix collisions in either member order

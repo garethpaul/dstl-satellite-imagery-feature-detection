@@ -508,6 +508,37 @@ class DatasetLoadTest(unittest.TestCase):
 
                 self.assertFalse(os.path.exists(output_dir))
 
+    def test_unzip_rejects_existing_destination_type_collisions_before_writing(self):
+        collisions = ("directory-at-file-target", "file-at-required-directory")
+
+        for collision in collisions:
+            with self.subTest(collision=collision), tempfile.TemporaryDirectory() as tmpdir:
+                output_dir = os.path.join(tmpdir, "output")
+                os.makedirs(output_dir)
+                nested_path = os.path.join(output_dir, "nested")
+                if collision == "directory-at-file-target":
+                    os.makedirs(nested_path)
+                    conflicting_member = "nested"
+                else:
+                    with open(nested_path, "w") as handle:
+                        handle.write("existing")
+                    conflicting_member = "nested/file.txt"
+
+                archive = os.path.join(tmpdir, "existing-type-collision.zip")
+                with zipfile.ZipFile(archive, "w") as zip_ref:
+                    zip_ref.writestr("safe.txt", "safe")
+                    zip_ref.writestr(conflicting_member, "replacement")
+
+                with self.assertRaisesRegex(ValueError, "destination type collision"):
+                    utils.unzip(archive, output_dir=output_dir)
+
+                self.assertFalse(os.path.exists(os.path.join(output_dir, "safe.txt")))
+                if collision == "directory-at-file-target":
+                    self.assertTrue(os.path.isdir(nested_path))
+                else:
+                    with open(nested_path) as handle:
+                        self.assertEqual("existing", handle.read())
+
     def test_unzip_extracts_safe_members(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             archive = os.path.join(tmpdir, "safe.zip")
