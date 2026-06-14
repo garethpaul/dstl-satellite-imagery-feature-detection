@@ -54,6 +54,10 @@ runtime. Cached downloads must be regular non-symlink files, and new partial
 downloads are created exclusively to reject concurrent path replacement.
 Cached and newly streamed payloads must also be non-empty ZIP archives before
 they are reused or atomically promoted.
+Credentialed download, extraction, private dataset, and loader claims require
+the exact-head dataset verification matrix. Evidence must use sanitized counts
+and size buckets and must not retain credentials, signed URLs, imagery, labels,
+private paths, or logs.
 
 ## Dependency and Supply Chain Security
 

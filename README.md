@@ -159,6 +159,10 @@ When the required SDK or runtime is unavailable, use static checks and source re
   streamed ZIP payload validation.
 - See `docs/plans/2026-06-13-dstl-archive-target-collisions.md` for normalized
   archive destination uniqueness.
+- Use [`DATASET_VERIFICATION.md`](DATASET_VERIFICATION.md) for exact-head
+  credentialed download, extraction, private dataset inventory, resource, and
+  loader evidence. It requires a private authorized environment and sanitized
+  counts and size buckets.
 
 ## Contributing
 

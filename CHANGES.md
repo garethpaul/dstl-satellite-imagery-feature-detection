@@ -2,6 +2,9 @@
 
 ## 2026-06-14
 
+- Added an exact-head DSTL dataset integration verification matrix that
+  separates offline checks from sanitized credentialed download, extraction,
+  private dataset, resource, and loader evidence.
 - Reject existing destination type collisions during archive preflight so a
   later file/directory mismatch cannot leave earlier members written.
 

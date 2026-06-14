@@ -42,6 +42,8 @@ Current baseline:
   files use exclusive creation to prevent path-following races.
 - Cached and newly streamed payloads must be non-empty ZIP archives before they
   are reused or promoted to the final dataset path.
+- Keep exact-head credentialed download, private dataset, and loader evidence
+  sanitized and separate from offline verification.
 
 Next priorities:
 

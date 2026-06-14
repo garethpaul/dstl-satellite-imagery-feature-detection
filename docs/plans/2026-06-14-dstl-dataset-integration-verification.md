@@ -1,13 +1,13 @@
 ---
 title: DSTL Dataset Integration Verification Matrix
 type: reliability
-status: in_progress
+status: completed
 date: 2026-06-14
 ---
 
 # DSTL Dataset Integration Verification Matrix
 
-## Status: In Progress
+## Status: Completed
 
 ## Problem Frame
 
@@ -54,3 +54,29 @@ competition archive inventory, extraction, or dataset loader smoke run.
 - Ruff, unit tests, compilation, and pip-audit
 - Isolated hostile documentation mutations
 - Exact diff, generated-artifact, and secret-pattern audits
+
+## Work Completed
+
+- Added a 14-scenario exact-head dataset matrix covering environment setup,
+  credential preflight, cache reuse, bounded downloads, payload rejection,
+  archive preflight and extraction, collision and race containment, dataset
+  inventories, resource budgets, and loader smoke behavior.
+- Required a private competition-authorized environment, sanitized counts and
+  size buckets, exact commit and pull-request attribution, and explicit
+  `pass`, `fail`, `blocked`, or `not run` statuses.
+- Kept offline checks, synthetic archive tests, credentialed downloads,
+  extracted private dataset evidence, and loader evidence separate.
+- Added mutation-sensitive static contracts without changing downloader,
+  archive, credential, resource, dependency, dataset, or loader behavior.
+
+## Verification Completed
+
+- `sh -n scripts/check-baseline.sh` and the focused static gate passed.
+- `make check` passed from the repository and an external working directory.
+- Full gates passed with Python 3.12.8 and Python 3.14.0, including 36 unit
+  tests, Ruff format/check, source compilation, and pip-audit with no known
+  vulnerabilities.
+- Twelve isolated hostile documentation mutations were rejected.
+- No credentialed Kaggle download, competition archive extraction, private
+  dataset inventory, or dataset loader scenario was executed; all 14
+  integration scenarios remain truthfully marked `not run`.

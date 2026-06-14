@@ -19,6 +19,8 @@ DESTINATION_RACE_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-destination-
 PREFIX_COLLISION_PLAN="$ROOT_DIR/docs/plans/2026-06-13-dstl-archive-prefix-collisions.md"
 EXISTING_TYPE_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-existing-target-types.md"
 MAKE_ROOT_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-make-root-override-protection.md"
+DATASET_VERIFICATION="$ROOT_DIR/DATASET_VERIFICATION.md"
+DATASET_VERIFICATION_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-dataset-integration-verification.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -32,6 +34,7 @@ require_file() {
 
 for path in \
   "README.md" \
+  "DATASET_VERIFICATION.md" \
   "Makefile" \
   "SECURITY.md" \
   "VISION.md" \
@@ -59,8 +62,83 @@ for path in \
   "docs/plans/2026-06-13-dstl-archive-prefix-collisions.md" \
   "docs/plans/2026-06-14-dstl-existing-target-types.md" \
   "docs/plans/2026-06-14-dstl-make-root-override-protection.md" \
+  "docs/plans/2026-06-14-dstl-dataset-integration-verification.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
+done
+
+for dataset_contract in \
+  "Commit: pending implementation commit" \
+  "Pull request: pending" \
+  "Evidence status: not run" \
+  "private competition-authorized environment" \
+  "Required sanitized evidence" \
+  "Use only \`pass\`, \`fail\`, \`blocked\`, or \`not run\`" \
+  "A unit test, source check, compile, lint, or dependency audit cannot mark an" \
+  "No credentialed Kaggle download, competition archive extraction, private"; do
+  if ! grep -Fq "$dataset_contract" "$DATASET_VERIFICATION"; then
+    printf '%s\n' "Dataset verification matrix contract is missing: $dataset_contract" >&2
+    exit 1
+  fi
+done
+
+if [ "$(grep -Ec '^\| [0-9]+ \|' "$DATASET_VERIFICATION")" -ne 14 ] ||
+  [ "$(grep -Ec '^\| [0-9]+ \|.*\| not run \|$' "$DATASET_VERIFICATION")" -ne 14 ]; then
+  printf '%s\n' "Dataset verification matrix must retain 14 explicitly not-run scenarios." >&2
+  exit 1
+fi
+
+for dataset_scenario in \
+  "Isolated environment setup" \
+  "Missing credential preflight" \
+  "Valid credential preflight" \
+  "Cached archive reuse" \
+  "Bounded Kaggle download" \
+  "Invalid download payload" \
+  "Archive member preflight" \
+  "Safe archive extraction" \
+  "Destination collision rejection" \
+  "Destination race containment" \
+  "Dataset archive inventory" \
+  "Extracted dataset inventory" \
+  "Resource budget enforcement" \
+  "Loader smoke behavior"; do
+  if [ "$(grep -Fc "| $dataset_scenario |" "$DATASET_VERIFICATION")" -ne 1 ]; then
+    printf '%s\n' "Dataset verification scenario is missing or duplicated: $dataset_scenario" >&2
+    exit 1
+  fi
+done
+
+for dataset_guidance in \
+  "DATASET_VERIFICATION.md" \
+  "private authorized environment" \
+  "sanitized" \
+  "size buckets"; do
+  if ! grep -Fq "$dataset_guidance" "$ROOT_DIR/README.md"; then
+    printf '%s\n' "README dataset verification guidance is missing: $dataset_guidance" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fq "Keep exact-head credentialed download, private dataset, and loader evidence" "$ROOT_DIR/VISION.md" ||
+  ! grep -Fq "Credentialed download, extraction, private dataset, and loader claims require" "$ROOT_DIR/SECURITY.md" ||
+  ! grep -Fq "Added an exact-head DSTL dataset integration verification matrix" "$ROOT_DIR/CHANGES.md"; then
+  printf '%s\n' "Project guidance must retain the DSTL dataset evidence boundary." >&2
+  exit 1
+fi
+
+for dataset_plan_contract in \
+  "status: completed" \
+  "## Status: Completed" \
+  "## Work Completed" \
+  "## Verification Completed" \
+  "Python 3.12.8 and Python 3.14.0" \
+  "Twelve isolated hostile documentation mutations were rejected" \
+  "all 14"; do
+  if ! grep -Fq "$dataset_plan_contract" "$DATASET_VERIFICATION_PLAN"; then
+    printf '%s\n' "Dataset verification plan must record completed evidence: $dataset_plan_contract" >&2
+    exit 1
+  fi
 done
 
 SAFE_ZIP_MEMBERS=$(awk '
