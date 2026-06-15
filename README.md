@@ -131,6 +131,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   replacement races cannot redirect archive bytes.
 - Validated downloads publish without replacing a raced final file; competing
   destination bytes are preserved and the downloader's partial is removed.
+- If post-publication partial cleanup fails, the downloader removes the final
+  name it created before reporting the failure and retrying partial cleanup.
 
 ## Security and Privacy Notes
 

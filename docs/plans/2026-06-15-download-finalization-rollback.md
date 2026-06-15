@@ -1,7 +1,7 @@
 ---
 title: Download Finalization Rollback
 type: reliability
-status: in_progress
+status: completed
 date: 2026-06-15
 execution: code
 ---
@@ -39,7 +39,25 @@ to other processes while reporting failure to the caller.
 - Do not add multi-process locking or alter extraction behavior.
 - Do not merge or close stacked pull requests without owner authorization.
 
-## Work Pending
+## Status: Completed
 
-- Implement owned-publication rollback and regression coverage.
-- Update maintained guidance and record the actual verification evidence.
+## Work Completed
+
+- Track final-name ownership after successful no-clobber publication.
+- Remove the invocation-owned final name before retrying partial cleanup when
+  post-publication cleanup fails.
+- Add fault-injection coverage proving the final and partial names are absent
+  and the response is closed after the failure.
+- Add ordering-sensitive source, regression, guidance, and completed-plan
+  contracts to the baseline gate.
+
+## Verification Completed
+
+- Python 3.12.8 Ruff formatting/lint, all 42 offline tests, bytecode
+  compilation, and dependency audit passed with no known vulnerabilities.
+- Repository and external-directory `make check` passed the full gate.
+- Six isolated hostile mutations were rejected for publication ownership,
+  final-name rollback, rollback ordering, regression removal, guidance drift,
+  and incomplete plan evidence.
+- No credentialed Kaggle request, dataset download, archive extraction, or
+  private dataset access was performed.

@@ -56,6 +56,8 @@ Download roots must remain descriptor-identical from pre-request validation
 through archive publication; symlinked or replaced roots fail closed.
 Download publication must fail when the final name races into existence;
 validated partial files must never overwrite competing destination bytes.
+If cleanup fails after publication, the downloader must remove the final name
+owned by that invocation before propagating the failure.
 Symlinked extraction roots must be rejected before descriptor traversal.
 Cached and newly streamed payloads must also be non-empty ZIP archives before
 they are reused or atomically promoted.

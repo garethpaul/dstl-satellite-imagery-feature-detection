@@ -2,6 +2,7 @@
 
 ## 2026-06-15
 
+- Rolled back owned final download names when post-publication cleanup fails.
 - Prevented download finalization from clobbering raced destination files.
 - Bound download cache and publication operations to a descriptor-verified output root.
 - Rejected symlinked extraction roots before descriptor traversal and member writes.

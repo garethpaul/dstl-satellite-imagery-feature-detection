@@ -534,6 +534,42 @@ class DatasetLoadTest(unittest.TestCase):
             self.assertFalse(os.path.lexists(partial_path))
             self.assertTrue(response.closed)
 
+    def test_download_rolls_back_final_file_when_partial_cleanup_fails(self):
+        response = FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+            partial_path = filepath + ".part"
+            original_unlink = os.unlink
+            partial_unlinks = 0
+
+            def fail_first_partial_cleanup(path, *args, **kwargs):
+                nonlocal partial_unlinks
+                if path == os.path.basename(partial_path):
+                    partial_unlinks += 1
+                    if partial_unlinks == 1:
+                        raise PermissionError("injected post-link cleanup failure")
+                return original_unlink(path, *args, **kwargs)
+
+            session = FakeSession(
+                response,
+                on_post=lambda: setattr(utils.os, "unlink", fail_first_partial_cleanup),
+            )
+            try:
+                with self.assertRaisesRegex(PermissionError, "injected post-link cleanup failure"):
+                    utils.download_url(
+                        kaggle_url(),
+                        output_dir=tmpdir,
+                        session=session,
+                        credentials={"UserName": "user", "Password": "secret"},
+                    )
+            finally:
+                utils.os.unlink = original_unlink
+
+            self.assertFalse(os.path.lexists(filepath))
+            self.assertFalse(os.path.lexists(partial_path))
+            self.assertTrue(response.closed)
+
     def test_unzip_rejects_path_traversal(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             archive = os.path.join(tmpdir, "bad.zip")

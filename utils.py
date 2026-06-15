@@ -211,6 +211,7 @@ def download_url(
         )
         client = session or requests
         response = client.post(url, data=credentials, stream=True, timeout=timeout)
+        published_final = False
         try:
             response.raise_for_status()
             require_download_root_identity(output_root, root_fd)
@@ -251,8 +252,14 @@ def download_url(
                 src_dir_fd=root_fd,
                 dst_dir_fd=root_fd,
             )
+            published_final = True
             os.unlink(partial_name, dir_fd=root_fd)
         except Exception:
+            if published_final:
+                try:
+                    os.unlink(filename, dir_fd=root_fd)
+                except FileNotFoundError:
+                    pass
             try:
                 os.unlink(partial_name, dir_fd=root_fd)
             except FileNotFoundError:

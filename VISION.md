@@ -40,6 +40,7 @@ Current baseline:
   parent traversal, and same-directory atomic file publication.
 - Bind download publication to a descriptor-verified output root.
 - Publish validated downloads without clobbering raced destinations.
+- Roll back owned final download names when post-publication cleanup fails.
 - Reject symlinked extraction roots before descriptor traversal.
 - Download cache reuse rejects symlinks and non-regular paths, while partial
   files use exclusive creation to prevent path-following races.

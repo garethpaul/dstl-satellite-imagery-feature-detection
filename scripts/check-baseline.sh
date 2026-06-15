@@ -24,6 +24,7 @@ DATASET_VERIFICATION_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-dataset-integrat
 ROOT_SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-15-001-dstl-extraction-root-symlink.md"
 DOWNLOAD_ROOT_PLAN="$ROOT_DIR/docs/plans/2026-06-15-descriptor-rooted-downloads.md"
 DOWNLOAD_NO_CLOBBER_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-finalization-no-clobber.md"
+DOWNLOAD_ROLLBACK_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-finalization-rollback.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -69,6 +70,7 @@ for path in \
   "docs/plans/2026-06-15-001-dstl-extraction-root-symlink.md" \
   "docs/plans/2026-06-15-descriptor-rooted-downloads.md" \
   "docs/plans/2026-06-15-download-finalization-no-clobber.md" \
+  "docs/plans/2026-06-15-download-finalization-rollback.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -523,6 +525,59 @@ for download_no_clobber_contract in \
     exit 1
   fi
 done
+
+for download_rollback_contract in \
+  'status: completed' \
+  '## Status: Completed' \
+  '## Verification Completed' \
+  'hostile mutations were rejected'; do
+  if ! grep -Fq "$download_rollback_contract" "$DOWNLOAD_ROLLBACK_PLAN"; then
+    printf '%s\n' "Download finalization rollback plan must record completed evidence: $download_rollback_contract" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fq 'published_final = False' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'published_final = True' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'if published_final:' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'os.unlink(filename, dir_fd=root_fd)' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'test_download_rolls_back_final_file_when_partial_cleanup_fails' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'self.assertFalse(os.path.lexists(filepath))' "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Download finalization failures must roll back the final name owned by this invocation." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'If post-publication partial cleanup fails' "$ROOT_DIR/README.md" || \
+  ! grep -Fq 'If cleanup fails after publication' "$ROOT_DIR/SECURITY.md" || \
+  ! grep -Fq 'Roll back owned final download names' "$ROOT_DIR/VISION.md" || \
+  ! grep -Fq 'Rolled back owned final download names' "$ROOT_DIR/CHANGES.md" || \
+  ! grep -Fq 'Preserve rollback of the invocation-owned final download name' "$AGENTS"; then
+  printf '%s\n' "Project guidance must document failed download publication rollback." >&2
+  exit 1
+fi
+
+python3 - "$ROOT_DIR/utils.py" <<'PY'
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+download = source[source.index("def download_url("):]
+order = [
+    "published_final = True",
+    "os.unlink(partial_name, dir_fd=root_fd)",
+    "if published_final:",
+    "os.unlink(filename, dir_fd=root_fd)",
+    "os.unlink(partial_name, dir_fd=root_fd)",
+]
+positions = []
+start = 0
+for token in order:
+    position = download.index(token, start)
+    positions.append(position)
+    start = position + len(token)
+if positions != sorted(positions):
+    raise SystemExit("Owned final publication must be rolled back before partial cleanup is retried.")
+PY
 
 if ! grep -Fq 'status: completed' "$ROOT_SYMLINK_PLAN" || \
   ! grep -Fq 'make check' "$ROOT_SYMLINK_PLAN" || \
