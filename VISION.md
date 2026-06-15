@@ -40,6 +40,8 @@ Current baseline:
   parent traversal, and same-directory atomic file publication.
 - Bind download publication to a descriptor-verified output root.
 - Publish validated downloads without clobbering raced destinations.
+- Per-attempt secret-suffixed partial names isolate concurrent downloads while
+  no-clobber publication permits only one final winner.
 - Roll back owned final download names when post-publication cleanup fails.
 - Revalidate the download root after final publication before returning paths.
 - Reject symlinked extraction roots before descriptor traversal.

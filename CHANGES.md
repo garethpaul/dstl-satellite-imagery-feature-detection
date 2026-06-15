@@ -2,6 +2,8 @@
 
 ## 2026-06-15
 
+- Isolated concurrent downloads with secret-suffixed partial names on the
+  current rollback and post-publication verification stack.
 - Revalidated download-root identity after final publication and rolled back
   invocation-owned files when the output pathname changed.
 - Rolled back owned final download names when post-publication cleanup fails.

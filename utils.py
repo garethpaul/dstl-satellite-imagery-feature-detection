@@ -188,7 +188,8 @@ def download_url(
     require_allowed_data_file(filename)
     output_root = os.path.abspath(output_dir or os.getcwd())
     filepath = os.path.join(output_root, filename)
-    partial_name = filename + ".part"
+    legacy_partial_name = filename + ".part"
+    partial_name = ".{0}.{1}.part".format(filename, secrets.token_hex(8))
     root_fd = open_download_root(output_root)
     try:
         cached_fd = open_cached_download(root_fd, filename)
@@ -200,7 +201,7 @@ def download_url(
             return filepath
 
         try:
-            os.unlink(partial_name, dir_fd=root_fd)
+            os.unlink(legacy_partial_name, dir_fd=root_fd)
         except FileNotFoundError:
             pass
 
