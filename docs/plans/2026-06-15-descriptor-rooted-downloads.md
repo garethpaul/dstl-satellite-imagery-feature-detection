@@ -1,6 +1,6 @@
 # Descriptor-Rooted Downloads
 
-Status: In Progress
+Status: Completed
 
 ## Problem
 
@@ -54,4 +54,13 @@ download filesystem operations outside the requested destination.
 
 ## Verification
 
-- Pending implementation and bounded validation.
+- The test-first run failed only the two new root-symlink and root-replacement
+  regressions; all 39 offline tests passed after descriptor-rooting the download
+  lifecycle.
+- Seven hostile mutations were rejected for root opening, both identity checks,
+  descriptor-relative staging, both focused regressions, README guidance, and
+  completed plan evidence.
+- Python 3.12.8 and isolated Python 3.14.0 `make check` passed with Ruff,
+  compilation, and dependency audits; Python 3.12.8 also passed from an external working directory.
+- No Kaggle credentials, live network request, private dataset, extraction
+  inventory, or loader scenario was used.

@@ -38,6 +38,7 @@ Current baseline:
   plus existing destination type collisions before writing files.
 - Close destination path races with descriptor-rooted extraction, no-follow
   parent traversal, and same-directory atomic file publication.
+- Bind download publication to a descriptor-verified output root.
 - Reject symlinked extraction roots before descriptor traversal.
 - Download cache reuse rejects symlinks and non-regular paths, while partial
   files use exclusive creation to prevent path-following races.

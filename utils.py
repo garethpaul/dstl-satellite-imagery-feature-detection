@@ -162,9 +162,9 @@ def require_allowed_data_file(filename):
         raise ValueError("Download filename must be in the configured DSTL data file list.")
 
 
-def require_valid_zip_file(path):
+def require_valid_zip_file(source):
     try:
-        with zipfile.ZipFile(path, "r") as zip_ref:
+        with zipfile.ZipFile(source, "r") as zip_ref:
             if not zip_ref.infolist():
                 raise ValueError("Downloaded file must be a non-empty ZIP archive.")
     except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
@@ -184,72 +184,88 @@ def download_url(
     timeout = normalize_timeout(timeout)
     max_download_bytes = normalize_positive_integer(max_download_bytes, "Maximum download size")
 
-    output_dir = output_dir or os.getcwd()
-    os.makedirs(output_dir, exist_ok=True)
-
     filename = filename_from_url(url)
     require_allowed_data_file(filename)
-    filepath = os.path.join(output_dir, filename)
-    partial_path = filepath + ".part"
-
-    if os.path.lexists(filepath):
-        existing_mode = os.lstat(filepath).st_mode
-        if stat.S_ISLNK(existing_mode) or not stat.S_ISREG(existing_mode):
-            raise ValueError("Existing download path must be a regular non-symlink file.")
-        require_valid_zip_file(filepath)
-        logging.warning("File %s exists", filepath)
-        return filepath
-
-    if os.path.lexists(partial_path):
-        os.remove(partial_path)
-
-    credentials = (
-        normalize_credentials(credentials)
-        if credentials is not None
-        else load_credentials(credentials_file)
-    )
-    client = session or requests
-
-    response = client.post(url, data=credentials, stream=True, timeout=timeout)
+    output_root = os.path.abspath(output_dir or os.getcwd())
+    filepath = os.path.join(output_root, filename)
+    partial_name = filename + ".part"
+    root_fd = open_download_root(output_root)
     try:
-        response.raise_for_status()
+        cached_fd = open_cached_download(root_fd, filename)
+        if cached_fd is not None:
+            with os.fdopen(cached_fd, "rb") as handle:
+                require_valid_zip_file(handle)
+            logging.warning("File %s exists", filepath)
+            return filepath
 
-        content_length = response.headers.get("Content-Length")
-        if content_length is not None:
+        try:
+            os.unlink(partial_name, dir_fd=root_fd)
+        except FileNotFoundError:
+            pass
+
+        credentials = (
+            normalize_credentials(credentials)
+            if credentials is not None
+            else load_credentials(credentials_file)
+        )
+        client = session or requests
+        response = client.post(url, data=credentials, stream=True, timeout=timeout)
+        try:
+            response.raise_for_status()
+            require_download_root_identity(output_root, root_fd)
+
+            content_length = response.headers.get("Content-Length")
+            if content_length is not None:
+                try:
+                    declared_size = int(content_length)
+                except ValueError as exc:
+                    raise ValueError("Download Content-Length must be an integer.") from exc
+                if declared_size < 0 or declared_size > max_download_bytes:
+                    raise ValueError("Download exceeds the configured size limit.")
+
+            logging.info("Load file %s", filename)
+            downloaded_bytes = 0
+            partial_fd = os.open(
+                partial_name,
+                os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600,
+                dir_fd=root_fd,
+            )
+            with os.fdopen(partial_fd, "w+b") as handle:
+                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                    if chunk:
+                        downloaded_bytes += len(chunk)
+                        if downloaded_bytes > max_download_bytes:
+                            raise ValueError("Download exceeds the configured size limit.")
+                        handle.write(chunk)
+                handle.flush()
+                os.fsync(handle.fileno())
+                handle.seek(0)
+                require_valid_zip_file(handle)
+
+            require_download_root_identity(output_root, root_fd)
+            os.rename(
+                partial_name,
+                filename,
+                src_dir_fd=root_fd,
+                dst_dir_fd=root_fd,
+            )
+        except Exception:
             try:
-                declared_size = int(content_length)
-            except ValueError as exc:
-                raise ValueError("Download Content-Length must be an integer.") from exc
-            if declared_size < 0 or declared_size > max_download_bytes:
-                raise ValueError("Download exceeds the configured size limit.")
+                os.unlink(partial_name, dir_fd=root_fd)
+            except FileNotFoundError:
+                pass
+            raise
+        finally:
+            close = getattr(response, "close", None)
+            if close:
+                close()
 
-        logging.info("Load file %s", filename)
-        downloaded_bytes = 0
-        open_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-        if hasattr(os, "O_NOFOLLOW"):
-            open_flags |= os.O_NOFOLLOW
-        partial_fd = os.open(partial_path, open_flags, 0o600)
-        with os.fdopen(partial_fd, "wb") as handle:
-            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                if chunk:
-                    downloaded_bytes += len(chunk)
-                    if downloaded_bytes > max_download_bytes:
-                        raise ValueError("Download exceeds the configured size limit.")
-                    handle.write(chunk)
-        require_valid_zip_file(partial_path)
-        os.replace(partial_path, filepath)
-    except Exception:
-        if os.path.lexists(partial_path):
-            os.remove(partial_path)
-        raise
+        logging.info("FINISH file %s", filename)
+        logging.info("File size: %d kb", os.stat(filename, dir_fd=root_fd).st_size)
+        return filepath
     finally:
-        close = getattr(response, "close", None)
-        if close:
-            close()
-
-    logging.info("FINISH file %s", filename)
-    logging.info("File size: %d kb", os.path.getsize(filepath))
-    return filepath
+        os.close(root_fd)
 
 
 def safe_zip_members(
@@ -327,7 +343,7 @@ def safe_zip_members(
         yield member
 
 
-def require_secure_extraction_support():
+def require_secure_descriptor_support():
     if (
         not hasattr(os, "O_DIRECTORY")
         or not hasattr(os, "O_NOFOLLOW")
@@ -336,7 +352,52 @@ def require_secure_extraction_support():
         or os.unlink not in os.supports_dir_fd
         or os.rename not in os.supports_dir_fd
     ):
-        raise RuntimeError("Secure descriptor-relative zip extraction is unavailable.")
+        raise RuntimeError("Secure descriptor-relative filesystem operations are unavailable.")
+
+
+def require_secure_extraction_support():
+    require_secure_descriptor_support()
+
+
+def open_download_root(output_root):
+    require_secure_descriptor_support()
+    try:
+        return open_output_root(output_root)
+    except (OSError, ValueError) as exc:
+        raise ValueError("Refusing to use a raced output root.") from exc
+
+
+def require_download_root_identity(output_root, root_fd):
+    try:
+        path_stat = os.stat(output_root, follow_symlinks=False)
+    except OSError as exc:
+        raise ValueError("Refusing to use a raced output root.") from exc
+    descriptor_stat = os.fstat(root_fd)
+    if not stat.S_ISDIR(path_stat.st_mode) or (
+        path_stat.st_dev,
+        path_stat.st_ino,
+    ) != (descriptor_stat.st_dev, descriptor_stat.st_ino):
+        raise ValueError("Refusing to use a raced output root.")
+
+
+def open_cached_download(root_fd, filename):
+    try:
+        cached_fd = os.open(
+            filename,
+            os.O_RDONLY | os.O_NOFOLLOW,
+            dir_fd=root_fd,
+        )
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError("Existing download path must be a regular non-symlink file.") from exc
+        raise
+
+    if not stat.S_ISREG(os.fstat(cached_fd).st_mode):
+        os.close(cached_fd)
+        raise ValueError("Existing download path must be a regular non-symlink file.")
+    return cached_fd
 
 
 def open_extraction_directory(parent_fd, component):

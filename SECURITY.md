@@ -52,6 +52,8 @@ publishes members; unsupported platforms fail closed. GitHub Actions runs the fu
 3.10, 3.12, and 3.14 with read-only repository permissions and a bounded
 runtime. Cached downloads must be regular non-symlink files, and new partial
 downloads are created exclusively to reject concurrent path replacement.
+Download roots must remain descriptor-identical from pre-request validation
+through archive publication; symlinked or replaced roots fail closed.
 Symlinked extraction roots must be rejected before descriptor traversal.
 Cached and newly streamed payloads must also be non-empty ZIP archives before
 they are reused or atomically promoted.

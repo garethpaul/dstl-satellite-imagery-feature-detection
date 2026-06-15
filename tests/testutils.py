@@ -394,6 +394,57 @@ class DatasetLoadTest(unittest.TestCase):
             self.assertEqual([], session.calls)
             self.assertTrue(os.path.islink(filepath))
 
+    def test_download_rejects_symlinked_output_root_before_request(self):
+        response = FakeResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outside_dir = os.path.join(tmpdir, "outside")
+            output_dir = os.path.join(tmpdir, "output")
+            os.makedirs(outside_dir)
+            os.symlink(outside_dir, output_dir)
+
+            with self.assertRaisesRegex(ValueError, "raced output root"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=output_dir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            self.assertEqual([], session.calls)
+            self.assertFalse(os.path.exists(os.path.join(outside_dir, "sample_submission.csv.zip")))
+
+    def test_download_rejects_replaced_output_root_before_writing(self):
+        response = FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            moved_dir = os.path.join(tmpdir, "moved-output")
+            outside_dir = os.path.join(tmpdir, "outside")
+            os.makedirs(output_dir)
+            os.makedirs(outside_dir)
+
+            def replace_output_root():
+                os.rename(output_dir, moved_dir)
+                os.symlink(outside_dir, output_dir)
+
+            session = FakeSession(response, on_post=replace_output_root)
+            with self.assertRaisesRegex(ValueError, "raced output root"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=output_dir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            self.assertFalse(os.path.exists(os.path.join(outside_dir, "sample_submission.csv.zip")))
+            self.assertFalse(
+                os.path.exists(os.path.join(outside_dir, "sample_submission.csv.zip.part"))
+            )
+            self.assertFalse(os.path.exists(os.path.join(moved_dir, "sample_submission.csv.zip")))
+            self.assertTrue(response.closed)
+
     def test_download_exclusively_creates_partial_file(self):
         response = FakeResponse()
 

@@ -22,6 +22,7 @@ MAKE_ROOT_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-make-root-override-protecti
 DATASET_VERIFICATION="$ROOT_DIR/DATASET_VERIFICATION.md"
 DATASET_VERIFICATION_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-dataset-integration-verification.md"
 ROOT_SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-15-001-dstl-extraction-root-symlink.md"
+DOWNLOAD_ROOT_PLAN="$ROOT_DIR/docs/plans/2026-06-15-descriptor-rooted-downloads.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -65,6 +66,7 @@ for path in \
   "docs/plans/2026-06-14-dstl-make-root-override-protection.md" \
   "docs/plans/2026-06-14-dstl-dataset-integration-verification.md" \
   "docs/plans/2026-06-15-001-dstl-extraction-root-symlink.md" \
+  "docs/plans/2026-06-15-descriptor-rooted-downloads.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -150,9 +152,8 @@ SAFE_ZIP_MEMBERS=$(awk '
 ' "$ROOT_DIR/utils.py")
 
 for payload_contract in \
-  "def require_valid_zip_file(path):" \
-  "require_valid_zip_file(filepath)" \
-  "require_valid_zip_file(partial_path)" \
+  "def require_valid_zip_file(source):" \
+  "require_valid_zip_file(handle)" \
   "test_download_rejects_invalid_cached_zip_before_credentials" \
   "test_download_reuses_valid_cached_zip_before_credentials" \
   "test_download_rejects_invalid_streamed_zip_and_removes_partial_file" \
@@ -185,10 +186,10 @@ if ! grep -Fq "non-empty ZIP archive" "$ROOT_DIR/README.md" ||
 fi
 
 for download_path_contract in \
-  "os.path.lexists(filepath)" \
-  "os.path.lexists(partial_path)" \
-  "os.lstat(filepath).st_mode" \
-  "os.O_EXCL" \
+  "def open_cached_download" \
+  "os.O_RDONLY | os.O_NOFOLLOW" \
+  "os.unlink(partial_name, dir_fd=root_fd)" \
+  "os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW" \
   "test_download_rejects_existing_symlink_cache_before_request" \
   "test_download_exclusively_creates_partial_file"; do
   if ! grep -Fq "$download_path_contract" "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"; then
@@ -344,8 +345,9 @@ if ! grep -Fq "iter_content" "$ROOT_DIR/utils.py" ||
   exit 1
 fi
 
-if ! grep -Fq "partial_path = filepath + \".part\"" "$ROOT_DIR/utils.py" ||
-  ! grep -Fq "os.replace(partial_path, filepath)" "$ROOT_DIR/utils.py" ||
+if ! grep -Fq 'partial_name = filename + ".part"' "$ROOT_DIR/utils.py" ||
+  ! grep -Fq 'src_dir_fd=root_fd' "$ROOT_DIR/utils.py" ||
+  ! grep -Fq 'dst_dir_fd=root_fd' "$ROOT_DIR/utils.py" ||
   ! grep -Fq "test_download_removes_partial_file_on_stream_failure" "$ROOT_DIR/tests/testutils.py"; then
   printf '%s\n' "Downloader must write atomically and test interrupted streams." >&2
   exit 1
@@ -444,6 +446,46 @@ if [ "$(grep -Fc 'os.path.abspath(output_dir)' "$ROOT_DIR/utils.py")" -ne 2 ] ||
   ! grep -Fq 'os.symlink(outside_dir, output_dir)' "$ROOT_DIR/tests/testutils.py" || \
   ! grep -Fq 'self.assertFalse(os.path.exists(os.path.join(outside_dir, "file.txt")))' "$ROOT_DIR/tests/testutils.py"; then
   printf '%s\n' "Descriptor-rooted extraction must reject symlinked output roots before writing." >&2
+  exit 1
+fi
+
+for download_root_contract in \
+  "output_root = os.path.abspath(output_dir or os.getcwd())" \
+  "def require_secure_descriptor_support" \
+  "def open_download_root" \
+  "def require_download_root_identity" \
+  "def open_cached_download" \
+  "os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW" \
+  "os.unlink(partial_name, dir_fd=root_fd)" \
+  "src_dir_fd=root_fd" \
+  "dst_dir_fd=root_fd" \
+  "test_download_rejects_symlinked_output_root_before_request" \
+  "test_download_rejects_replaced_output_root_before_writing"; do
+  if ! grep -Fq "$download_root_contract" "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"; then
+    printf '%s\n' "Descriptor-rooted download contract is missing: $download_root_contract" >&2
+    exit 1
+  fi
+done
+
+if [ "$(grep -Fc '            require_download_root_identity(output_root, root_fd)' "$ROOT_DIR/utils.py")" -ne 2 ]; then
+  printf '%s\n' "Descriptor-rooted downloads must verify output-root identity after the request and before publication." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'Status: Completed' "$DOWNLOAD_ROOT_PLAN" || \
+  ! grep -Fq '39 offline tests' "$DOWNLOAD_ROOT_PLAN" || \
+  ! grep -Fq 'hostile mutations were rejected' "$DOWNLOAD_ROOT_PLAN" || \
+  ! grep -Fq 'external working directory' "$DOWNLOAD_ROOT_PLAN"; then
+  printf '%s\n' "Descriptor-rooted download plan must record completed verification." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'Downloads hold a descriptor-verified output root' "$ROOT_DIR/README.md" || \
+  ! grep -Fq 'Download roots must remain descriptor-identical' "$ROOT_DIR/SECURITY.md" || \
+  ! grep -Fq 'Bind download publication to a descriptor-verified output root' "$ROOT_DIR/VISION.md" || \
+  ! grep -Fq 'Bound download cache and publication operations to a descriptor-verified output root' "$ROOT_DIR/CHANGES.md" || \
+  ! grep -Fq 'Preserve descriptor-rooted download cache and publication operations' "$AGENTS"; then
+  printf '%s\n' "Project guidance must document descriptor-rooted downloads." >&2
   exit 1
 fi
 

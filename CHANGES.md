@@ -2,6 +2,7 @@
 
 ## 2026-06-15
 
+- Bound download cache and publication operations to a descriptor-verified output root.
 - Rejected symlinked extraction roots before descriptor traversal and member writes.
 
 ## 2026-06-14
