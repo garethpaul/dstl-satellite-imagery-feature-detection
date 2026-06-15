@@ -1,7 +1,7 @@
 ---
 title: Concurrent Download Partial Isolation
 type: security
-status: planned
+status: completed
 date: 2026-06-15
 execution: code
 ---
@@ -95,8 +95,23 @@ and truthful completed verification evidence.
 - Secret-suffixed partial files must be removed on every success and failure
   path to avoid consuming disk space.
 
-## Status: Planned
+## Status: Completed
 
 ## Completion Evidence
 
-- Pending implementation and verification.
+- Replaced the active shared `.part` name with a per-attempt secret-suffixed
+  descriptor-relative name while preserving cleanup of the legacy deterministic
+  path.
+- Added a synchronized two-thread regression proving the first request
+  publishes its own bytes, the second fails with `FileExistsError`, both
+  responses close, and no partial files remain.
+- The test-first regression failed on the previous implementation because the
+  second request raised `FileNotFoundError`; all 42 focused tests and Ruff
+  format/lint passed after the fix on Python 3.12.8.
+- Six isolated hostile mutations were rejected for deterministic naming, token
+  removal, concurrency-test removal, cleanup weakening, guidance drift, and
+  incomplete plan evidence.
+- The completed baseline checker passed from an external working directory.
+- `make check` passed from both the repository and an external working
+  directory, including all 42 tests, Ruff format/lint, bytecode compilation,
+  and dependency audit with no known vulnerabilities.

@@ -1,6 +1,7 @@
 import io
 import os
 import tempfile
+import threading
 import unittest
 import zipfile
 
@@ -490,19 +491,24 @@ class DatasetLoadTest(unittest.TestCase):
             outside_path = os.path.join(tmpdir, "outside.zip")
             with open(outside_path, "wb") as handle:
                 handle.write(b"outside")
-            partial_path = os.path.join(tmpdir, "sample_submission.csv.zip.part")
+            partial_path = os.path.join(tmpdir, ".sample_submission.csv.zip.fixed.part")
             session = FakeSession(
                 response,
                 on_post=lambda: os.symlink(outside_path, partial_path),
             )
 
-            with self.assertRaises(FileExistsError):
-                utils.download_url(
-                    kaggle_url(),
-                    output_dir=tmpdir,
-                    session=session,
-                    credentials={"UserName": "user", "Password": "secret"},
-                )
+            original_token_hex = utils.secrets.token_hex
+            utils.secrets.token_hex = lambda _: "fixed"
+            try:
+                with self.assertRaises(FileExistsError):
+                    utils.download_url(
+                        kaggle_url(),
+                        output_dir=tmpdir,
+                        session=session,
+                        credentials={"UserName": "user", "Password": "secret"},
+                    )
+            finally:
+                utils.secrets.token_hex = original_token_hex
 
             with open(outside_path, "rb") as handle:
                 self.assertEqual(b"outside", handle.read())
@@ -514,7 +520,6 @@ class DatasetLoadTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
-            partial_path = filepath + ".part"
 
             def create_final_file():
                 with open(filepath, "wb") as handle:
@@ -531,8 +536,76 @@ class DatasetLoadTest(unittest.TestCase):
 
             with open(filepath, "rb") as handle:
                 self.assertEqual(b"competing download", handle.read())
-            self.assertFalse(os.path.lexists(partial_path))
+            self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
             self.assertTrue(response.closed)
+
+    def test_concurrent_downloads_do_not_share_partial_files(self):
+        first_payload = zip_payload(b"first download")
+        second_payload = zip_payload(b"second download")
+        first_written = threading.Event()
+        second_written = threading.Event()
+        finish_first = threading.Event()
+        finish_second = threading.Event()
+
+        class PausingResponse(FakeResponse):
+            def __init__(self, payload, written, finish):
+                super().__init__([payload])
+                self.written = written
+                self.finish = finish
+
+            def iter_content(self, chunk_size):
+                self.chunk_size = chunk_size
+                yield from self.chunks
+                self.written.set()
+                if not self.finish.wait(timeout=5):
+                    raise RuntimeError("test download did not resume")
+
+        first_response = PausingResponse(first_payload, first_written, finish_first)
+        second_response = PausingResponse(second_payload, second_written, finish_second)
+        results = {}
+        errors = {}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+
+            def run_download(name, response):
+                try:
+                    results[name] = utils.download_url(
+                        kaggle_url(),
+                        output_dir=tmpdir,
+                        session=FakeSession(response),
+                        credentials={"UserName": "user", "Password": "secret"},
+                    )
+                except Exception as exc:
+                    errors[name] = exc
+
+            first_thread = threading.Thread(
+                target=run_download,
+                args=("first", first_response),
+            )
+            second_thread = threading.Thread(
+                target=run_download,
+                args=("second", second_response),
+            )
+            first_thread.start()
+            self.assertTrue(first_written.wait(timeout=5))
+            second_thread.start()
+            self.assertTrue(second_written.wait(timeout=5))
+
+            finish_first.set()
+            first_thread.join(timeout=5)
+            self.assertFalse(first_thread.is_alive())
+            finish_second.set()
+            second_thread.join(timeout=5)
+            self.assertFalse(second_thread.is_alive())
+
+            self.assertEqual(filepath, results.get("first"))
+            self.assertIsInstance(errors.get("second"), FileExistsError)
+            with open(filepath, "rb") as handle:
+                self.assertEqual(first_payload, handle.read())
+            self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
+            self.assertTrue(first_response.closed)
+            self.assertTrue(second_response.closed)
 
     def test_unzip_rejects_path_traversal(self):
         with tempfile.TemporaryDirectory() as tmpdir:

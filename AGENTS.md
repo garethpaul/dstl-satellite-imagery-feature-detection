@@ -61,6 +61,8 @@
   symlinked or replaced output roots fail before archive bytes are written.
 - Preserve no-clobber download finalization so a destination created during a
   transfer is not overwritten and the partial file is cleaned.
+- Ensure secret-suffixed partial names isolate concurrent downloads so one
+  request cannot publish or remove another request's temporary file.
 - Preserve rejection of symlinked extraction roots before descriptor traversal.
 
 ## Agent workflow

@@ -131,6 +131,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   replacement races cannot redirect archive bytes.
 - Validated downloads publish without replacing a raced final file; competing
   destination bytes are preserved and the downloader's partial is removed.
+- Per-attempt secret-suffixed partial names isolate concurrent downloads so one
+  request cannot publish or clean up another request's in-flight file.
 
 ## Security and Privacy Notes
 

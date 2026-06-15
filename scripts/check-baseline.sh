@@ -24,6 +24,7 @@ DATASET_VERIFICATION_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-dataset-integrat
 ROOT_SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-15-001-dstl-extraction-root-symlink.md"
 DOWNLOAD_ROOT_PLAN="$ROOT_DIR/docs/plans/2026-06-15-descriptor-rooted-downloads.md"
 DOWNLOAD_NO_CLOBBER_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-finalization-no-clobber.md"
+DOWNLOAD_PARTIAL_ISOLATION_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-partial-isolation.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -69,6 +70,7 @@ for path in \
   "docs/plans/2026-06-15-001-dstl-extraction-root-symlink.md" \
   "docs/plans/2026-06-15-descriptor-rooted-downloads.md" \
   "docs/plans/2026-06-15-download-finalization-no-clobber.md" \
+  "docs/plans/2026-06-15-download-partial-isolation.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -347,11 +349,37 @@ if ! grep -Fq "iter_content" "$ROOT_DIR/utils.py" ||
   exit 1
 fi
 
-if ! grep -Fq 'partial_name = filename + ".part"' "$ROOT_DIR/utils.py" ||
+if ! grep -Fq 'partial_name = ".{0}.{1}.part".format(filename, secrets.token_hex(8))' "$ROOT_DIR/utils.py" ||
   ! grep -Fq 'src_dir_fd=root_fd' "$ROOT_DIR/utils.py" ||
   ! grep -Fq 'dst_dir_fd=root_fd' "$ROOT_DIR/utils.py" ||
   ! grep -Fq "test_download_removes_partial_file_on_stream_failure" "$ROOT_DIR/tests/testutils.py"; then
   printf '%s\n' "Downloader must write atomically and test interrupted streams." >&2
+  exit 1
+fi
+
+if grep -Eq '^[[:space:]]*partial_name = filename \+ "\.part"$' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'legacy_partial_name = filename + ".part"' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'test_concurrent_downloads_do_not_share_partial_files' "$ROOT_DIR/tests/testutils.py" || \
+  [ "$(grep -Fc 'threading.Event()' "$ROOT_DIR/tests/testutils.py")" -lt 4 ] || \
+  ! grep -Fq 'self.assertIsInstance(errors.get("second"), FileExistsError)' "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Concurrent downloads must use isolated partial names with regression coverage." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'status: completed' "$DOWNLOAD_PARTIAL_ISOLATION_PLAN" || \
+  ! grep -Fq 'make check' "$DOWNLOAD_PARTIAL_ISOLATION_PLAN" || \
+  ! grep -Fq 'Six isolated hostile mutations were rejected' "$DOWNLOAD_PARTIAL_ISOLATION_PLAN" || \
+  ! grep -Fq 'external working directory' "$DOWNLOAD_PARTIAL_ISOLATION_PLAN"; then
+  printf '%s\n' "Download partial isolation plan must record completed verification." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'secret-suffixed partial names isolate concurrent downloads' "$ROOT_DIR/README.md" || \
+  ! grep -Fq 'secret-suffixed partial names isolate concurrent downloads' "$ROOT_DIR/SECURITY.md" || \
+  ! grep -Fq 'secret-suffixed partial names isolate concurrent downloads' "$ROOT_DIR/VISION.md" || \
+  ! grep -Fq 'secret-suffixed partial names isolate concurrent downloads' "$AGENTS" || \
+  ! grep -Fq 'Isolated concurrent downloads with secret-suffixed partial names' "$ROOT_DIR/CHANGES.md"; then
+  printf '%s\n' "Project guidance must document concurrent download partial isolation." >&2
   exit 1
 fi
 

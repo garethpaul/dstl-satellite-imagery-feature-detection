@@ -2,6 +2,7 @@
 
 ## 2026-06-15
 
+- Isolated concurrent downloads with secret-suffixed partial names.
 - Prevented download finalization from clobbering raced destination files.
 - Bound download cache and publication operations to a descriptor-verified output root.
 - Rejected symlinked extraction roots before descriptor traversal and member writes.

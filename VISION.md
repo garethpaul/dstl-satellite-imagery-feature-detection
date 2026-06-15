@@ -43,6 +43,8 @@ Current baseline:
 - Reject symlinked extraction roots before descriptor traversal.
 - Download cache reuse rejects symlinks and non-regular paths, while partial
   files use exclusive creation to prevent path-following races.
+- Per-attempt secret-suffixed partial names isolate concurrent downloads while
+  no-clobber publication permits only one final winner.
 - Cached and newly streamed payloads must be non-empty ZIP archives before they
   are reused or promoted to the final dataset path.
 - Keep exact-head credentialed download, private dataset, and loader evidence
