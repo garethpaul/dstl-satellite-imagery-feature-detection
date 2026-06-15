@@ -27,6 +27,7 @@ DOWNLOAD_NO_CLOBBER_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-finalization-
 DOWNLOAD_PARTIAL_ISOLATION_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-partial-isolation.md"
 DOWNLOAD_ROLLBACK_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-finalization-rollback.md"
 POST_PUBLICATION_ROOT_PLAN="$ROOT_DIR/docs/plans/2026-06-15-post-publication-download-root-check.md"
+RESPONSE_CLOSE_ROLLBACK_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-response-close-rollback.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -75,6 +76,7 @@ for path in \
   "docs/plans/2026-06-15-download-partial-isolation.md" \
   "docs/plans/2026-06-15-download-finalization-rollback.md" \
   "docs/plans/2026-06-15-post-publication-download-root-check.md" \
+  "docs/plans/2026-06-15-download-response-close-rollback.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -649,6 +651,54 @@ if ! grep -Fq 'revalidated after publication' "$ROOT_DIR/README.md" || \
   ! grep -Fq 'Revalidated download-root identity after final publication' "$ROOT_DIR/CHANGES.md" || \
   ! grep -Fq 'Preserve post-publication download-root identity checks' "$AGENTS"; then
   printf '%s\n' "Project guidance must document post-publication download-root verification." >&2
+  exit 1
+fi
+
+for response_close_contract in \
+  'status: completed' \
+  '## Status: Completed' \
+  '## Verification Completed' \
+  'hostile mutations were rejected' \
+  'No credentialed Kaggle request'; do
+  if ! grep -Fq "$response_close_contract" "$RESPONSE_CLOSE_ROLLBACK_PLAN"; then
+    printf '%s\n' "Response-close rollback plan must record completed evidence: $response_close_contract" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fq 'response_close_attempted = False' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'response_close_attempted = True' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'if not response_close_attempted:' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'test_download_rolls_back_final_file_when_response_close_fails' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'test_download_rolls_back_when_output_root_changes_during_response_close' "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Response finalization must remain inside owned-publication rollback and root verification." >&2
+  exit 1
+fi
+
+python3 - "$ROOT_DIR/utils.py" <<'PY'
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+download = source[source.index("def download_url("):]
+publication = download.index("published_final = True")
+close_attempt = download.index("response_close_attempted = True", publication)
+close_call = download.index("close()", close_attempt)
+final_identity = download.index(
+    "require_download_root_identity(output_root, root_fd)", close_call
+)
+rollback = download.index("if published_final:", final_identity)
+fallback_close = download.index("if not response_close_attempted:", rollback)
+if not publication < close_attempt < close_call < final_identity < rollback < fallback_close:
+    raise SystemExit("Response close and final root verification must remain inside rollback scope.")
+PY
+
+if ! grep -Fq 'Successful downloads close the response inside the publication rollback scope' "$ROOT_DIR/README.md" || \
+  ! grep -Fq 'Response finalization failures must roll back an invocation-owned published download' "$ROOT_DIR/SECURITY.md" || \
+  ! grep -Fq 'Keep response close and final root verification inside download rollback' "$ROOT_DIR/VISION.md" || \
+  ! grep -Fq 'Rolled back published downloads when response finalization failed' "$ROOT_DIR/CHANGES.md" || \
+  ! grep -Fq 'Preserve response close and final root verification inside publication rollback' "$AGENTS"; then
+  printf '%s\n' "Project guidance must document response-close publication rollback." >&2
   exit 1
 fi
 

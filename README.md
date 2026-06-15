@@ -138,6 +138,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - The descriptor-held download root is revalidated after publication; a
   replacement present at that boundary fails closed and rolls back the owned
   final name.
+- Successful downloads close the response inside the publication rollback scope,
+  then revalidate the descriptor-held root before returning the final pathname.
 
 ## Security and Privacy Notes
 

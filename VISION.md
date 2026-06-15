@@ -44,6 +44,7 @@ Current baseline:
   no-clobber publication permits only one final winner.
 - Roll back owned final download names when post-publication cleanup fails.
 - Revalidate the download root after final publication before returning paths.
+- Keep response close and final root verification inside download rollback.
 - Reject symlinked extraction roots before descriptor traversal.
 - Download cache reuse rejects symlinks and non-regular paths, while partial
   files use exclusive creation to prevent path-following races.

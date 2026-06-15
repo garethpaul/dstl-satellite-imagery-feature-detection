@@ -578,6 +578,59 @@ class DatasetLoadTest(unittest.TestCase):
             self.assertFalse(os.path.lexists(partial_path))
             self.assertTrue(response.closed)
 
+    def test_download_rolls_back_final_file_when_response_close_fails(self):
+        class FailingCloseResponse(FakeResponse):
+            def close(self):
+                self.closed = True
+                raise RuntimeError("injected response close failure")
+
+        response = FailingCloseResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+
+            with self.assertRaisesRegex(RuntimeError, "injected response close failure"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=FakeSession(response),
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            self.assertFalse(os.path.lexists(filepath))
+            self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
+            self.assertTrue(response.closed)
+
+    def test_download_rolls_back_when_output_root_changes_during_response_close(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            moved_dir = os.path.join(tmpdir, "moved-output")
+            outside_dir = os.path.join(tmpdir, "outside")
+            os.makedirs(output_dir)
+            os.makedirs(outside_dir)
+            filename = "sample_submission.csv.zip"
+
+            class ReplacingCloseResponse(FakeResponse):
+                def close(self):
+                    os.rename(output_dir, moved_dir)
+                    os.symlink(outside_dir, output_dir)
+                    super().close()
+
+            response = ReplacingCloseResponse()
+
+            with self.assertRaisesRegex(ValueError, "raced output root"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=output_dir,
+                    session=FakeSession(response),
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            self.assertFalse(os.path.lexists(os.path.join(moved_dir, filename)))
+            self.assertEqual([], [name for name in os.listdir(moved_dir) if name.endswith(".part")])
+            self.assertFalse(os.path.lexists(os.path.join(outside_dir, filename)))
+            self.assertTrue(response.closed)
+
     def test_concurrent_downloads_do_not_share_partial_files(self):
         first_payload = zip_payload(b"first download")
         second_payload = zip_payload(b"second download")

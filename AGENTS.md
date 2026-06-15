@@ -67,6 +67,7 @@
   post-publication partial cleanup fails.
 - Preserve post-publication download-root identity checks before returning the
   final pathname.
+- Preserve response close and final root verification inside publication rollback.
 - Preserve rejection of symlinked extraction roots before descriptor traversal.
 
 ## Agent workflow

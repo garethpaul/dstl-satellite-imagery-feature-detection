@@ -1,6 +1,6 @@
 ---
 title: Download Response Close Rollback
-status: in_progress
+status: completed
 date: 2026-06-15
 ---
 
@@ -41,6 +41,25 @@ before returning the pathname.
   fault tests, guidance, and plan evidence
 - Exact diff, Python artifact, whitespace, conflict-marker, and credential scans
 
-## Status: In Progress
+## Status: Completed
 
-Implementation and verification evidence will be recorded after the gates complete.
+## Work Completed
+
+- Moved successful response close into the invocation-owned publication rollback
+  transaction and retained fallback close for earlier failures.
+- Revalidated output-root identity after successful response close.
+- Added fault-injection coverage for close failure and close-time root replacement,
+  plus ordering-sensitive source contracts and synchronized guidance.
+
+## Verification Completed
+
+- Both focused response-finalization regressions passed.
+- A clean static fixture passed all 46 offline tests.
+- Eight isolated hostile mutations were rejected across close ordering, rollback,
+  fallback cleanup, both regressions, guidance, and plan status.
+- Python compilation and POSIX shell syntax checks passed.
+- Repository-root and external-directory `make check` both passed Ruff format and
+  lint, all 46 offline tests, Python compilation, and dependency audit with no
+  known vulnerabilities.
+- No credentialed Kaggle request, dataset download, archive extraction, or private
+  dataset access was performed.

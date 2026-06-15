@@ -63,6 +63,8 @@ owned by that invocation before propagating the failure.
 The download root must be revalidated after final publication so a path
 replacement present at that validation is detected and the owned final name is
 rolled back before an invalid pathname is returned.
+Response finalization failures must roll back an invocation-owned published download,
+and root identity must be checked again after a successful response close.
 Symlinked extraction roots must be rejected before descriptor traversal.
 Cached and newly streamed payloads must also be non-empty ZIP archives before
 they are reused or atomically promoted.

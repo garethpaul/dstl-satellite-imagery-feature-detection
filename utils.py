@@ -213,6 +213,7 @@ def download_url(
         client = session or requests
         response = client.post(url, data=credentials, stream=True, timeout=timeout)
         published_final = False
+        response_close_attempted = False
         try:
             response.raise_for_status()
             require_download_root_identity(output_root, root_fd)
@@ -255,6 +256,10 @@ def download_url(
             )
             published_final = True
             os.unlink(partial_name, dir_fd=root_fd)
+            close = getattr(response, "close", None)
+            if close:
+                response_close_attempted = True
+                close()
             require_download_root_identity(output_root, root_fd)
         except Exception:
             if published_final:
@@ -268,9 +273,10 @@ def download_url(
                 pass
             raise
         finally:
-            close = getattr(response, "close", None)
-            if close:
-                close()
+            if not response_close_attempted:
+                close = getattr(response, "close", None)
+                if close:
+                    close()
 
         logging.info("FINISH file %s", filename)
         logging.info("File size: %d kb", os.stat(filename, dir_fd=root_fd).st_size)

@@ -2,6 +2,8 @@
 
 ## 2026-06-15
 
+- Rolled back published downloads when response finalization failed and moved
+  the final output-root identity check after response close.
 - Isolated concurrent downloads with secret-suffixed partial names on the
   current rollback and post-publication verification stack.
 - Revalidated download-root identity after final publication and rolled back
