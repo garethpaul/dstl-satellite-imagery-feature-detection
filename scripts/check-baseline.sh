@@ -460,20 +460,21 @@ for download_root_contract in \
   "src_dir_fd=root_fd" \
   "dst_dir_fd=root_fd" \
   "test_download_rejects_symlinked_output_root_before_request" \
-  "test_download_rejects_replaced_output_root_before_writing"; do
+  "test_download_rejects_replaced_output_root_before_writing" \
+  "test_download_rejects_replaced_output_root_during_cache_validation"; do
   if ! grep -Fq "$download_root_contract" "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"; then
     printf '%s\n' "Descriptor-rooted download contract is missing: $download_root_contract" >&2
     exit 1
   fi
 done
 
-if [ "$(grep -Fc '            require_download_root_identity(output_root, root_fd)' "$ROOT_DIR/utils.py")" -ne 2 ]; then
-  printf '%s\n' "Descriptor-rooted downloads must verify output-root identity after the request and before publication." >&2
+if [ "$(grep -Fc '            require_download_root_identity(output_root, root_fd)' "$ROOT_DIR/utils.py")" -ne 3 ]; then
+  printf '%s\n' "Descriptor-rooted downloads must verify output-root identity for cache reuse, after the request, and before publication." >&2
   exit 1
 fi
 
 if ! grep -Fq 'Status: Completed' "$DOWNLOAD_ROOT_PLAN" || \
-  ! grep -Fq '39 offline tests' "$DOWNLOAD_ROOT_PLAN" || \
+  ! grep -Fq '40 offline tests' "$DOWNLOAD_ROOT_PLAN" || \
   ! grep -Fq 'hostile mutations were rejected' "$DOWNLOAD_ROOT_PLAN" || \
   ! grep -Fq 'external working directory' "$DOWNLOAD_ROOT_PLAN"; then
   printf '%s\n' "Descriptor-rooted download plan must record completed verification." >&2

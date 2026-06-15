@@ -195,6 +195,7 @@ def download_url(
         if cached_fd is not None:
             with os.fdopen(cached_fd, "rb") as handle:
                 require_valid_zip_file(handle)
+            require_download_root_identity(output_root, root_fd)
             logging.warning("File %s exists", filepath)
             return filepath
 
