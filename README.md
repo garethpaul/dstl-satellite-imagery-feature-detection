@@ -133,6 +133,9 @@ When the required SDK or runtime is unavailable, use static checks and source re
   destination bytes are preserved and the downloader's partial is removed.
 - If post-publication partial cleanup fails, the downloader removes the final
   name it created before reporting the failure and retrying partial cleanup.
+- The descriptor-held download root is revalidated after publication; a
+  replacement present at that boundary fails closed and rolls back the owned
+  final name.
 
 ## Security and Privacy Notes
 

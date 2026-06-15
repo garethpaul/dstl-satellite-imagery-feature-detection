@@ -2,6 +2,8 @@
 
 ## 2026-06-15
 
+- Revalidated download-root identity after final publication and rolled back
+  invocation-owned files when the output pathname changed.
 - Rolled back owned final download names when post-publication cleanup fails.
 - Prevented download finalization from clobbering raced destination files.
 - Bound download cache and publication operations to a descriptor-verified output root.

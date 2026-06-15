@@ -41,6 +41,7 @@ Current baseline:
 - Bind download publication to a descriptor-verified output root.
 - Publish validated downloads without clobbering raced destinations.
 - Roll back owned final download names when post-publication cleanup fails.
+- Revalidate the download root after final publication before returning paths.
 - Reject symlinked extraction roots before descriptor traversal.
 - Download cache reuse rejects symlinks and non-regular paths, while partial
   files use exclusive creation to prevent path-following races.

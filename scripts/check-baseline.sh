@@ -25,6 +25,7 @@ ROOT_SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-15-001-dstl-extraction-root-syml
 DOWNLOAD_ROOT_PLAN="$ROOT_DIR/docs/plans/2026-06-15-descriptor-rooted-downloads.md"
 DOWNLOAD_NO_CLOBBER_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-finalization-no-clobber.md"
 DOWNLOAD_ROLLBACK_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-finalization-rollback.md"
+POST_PUBLICATION_ROOT_PLAN="$ROOT_DIR/docs/plans/2026-06-15-post-publication-download-root-check.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -71,6 +72,7 @@ for path in \
   "docs/plans/2026-06-15-descriptor-rooted-downloads.md" \
   "docs/plans/2026-06-15-download-finalization-no-clobber.md" \
   "docs/plans/2026-06-15-download-finalization-rollback.md" \
+  "docs/plans/2026-06-15-post-publication-download-root-check.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -472,8 +474,8 @@ for download_root_contract in \
   fi
 done
 
-if [ "$(grep -Fc '            require_download_root_identity(output_root, root_fd)' "$ROOT_DIR/utils.py")" -ne 3 ]; then
-  printf '%s\n' "Descriptor-rooted downloads must verify output-root identity for cache reuse, after the request, and before publication." >&2
+if [ "$(grep -Fc '            require_download_root_identity(output_root, root_fd)' "$ROOT_DIR/utils.py")" -ne 4 ]; then
+  printf '%s\n' "Descriptor-rooted downloads must verify output-root identity for cache reuse, after the request, before publication, and after publication." >&2
   exit 1
 fi
 
@@ -578,6 +580,49 @@ for token in order:
 if positions != sorted(positions):
     raise SystemExit("Owned final publication must be rolled back before partial cleanup is retried.")
 PY
+
+for post_publication_root_contract in \
+  'status: completed' \
+  '## Status: Completed' \
+  '## Verification Completed' \
+  'hostile mutations were rejected'; do
+  if ! grep -Fq "$post_publication_root_contract" "$POST_PUBLICATION_ROOT_PLAN"; then
+    printf '%s\n' "Post-publication root plan must record completed evidence: $post_publication_root_contract" >&2
+    exit 1
+  fi
+done
+
+python3 - "$ROOT_DIR/utils.py" <<'PY'
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+download = source[source.index("def download_url("):]
+publication = download.index("published_final = True")
+partial_cleanup = download.index("os.unlink(partial_name, dir_fd=root_fd)", publication)
+post_publication_check = download.index(
+    "require_download_root_identity(output_root, root_fd)", partial_cleanup
+)
+rollback = download.index("if published_final:", post_publication_check)
+if not publication < partial_cleanup < post_publication_check < rollback:
+    raise SystemExit("Output-root identity must be checked inside publication rollback scope.")
+PY
+
+if ! grep -Fq 'test_download_rolls_back_when_output_root_changes_after_publication' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'self.assertEqual(3, identity_checks)' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'self.assertFalse(os.path.lexists(os.path.join(moved_dir, filename)))' "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Post-publication output-root races must fail closed and roll back owned files." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'revalidated after publication' "$ROOT_DIR/README.md" || \
+  ! grep -Fq 'revalidated after final publication' "$ROOT_DIR/SECURITY.md" || \
+  ! grep -Fq 'Revalidate the download root after final publication' "$ROOT_DIR/VISION.md" || \
+  ! grep -Fq 'Revalidated download-root identity after final publication' "$ROOT_DIR/CHANGES.md" || \
+  ! grep -Fq 'Preserve post-publication download-root identity checks' "$AGENTS"; then
+  printf '%s\n' "Project guidance must document post-publication download-root verification." >&2
+  exit 1
+fi
 
 if ! grep -Fq 'status: completed' "$ROOT_SYMLINK_PLAN" || \
   ! grep -Fq 'make check' "$ROOT_SYMLINK_PLAN" || \

@@ -570,6 +570,45 @@ class DatasetLoadTest(unittest.TestCase):
             self.assertFalse(os.path.lexists(partial_path))
             self.assertTrue(response.closed)
 
+    def test_download_rolls_back_when_output_root_changes_after_publication(self):
+        response = FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            moved_dir = os.path.join(tmpdir, "moved-output")
+            outside_dir = os.path.join(tmpdir, "outside")
+            os.makedirs(output_dir)
+            os.makedirs(outside_dir)
+            filename = "sample_submission.csv.zip"
+            original_require_identity = utils.require_download_root_identity
+            identity_checks = 0
+
+            def replace_root_after_publication(path, root_fd):
+                nonlocal identity_checks
+                identity_checks += 1
+                if identity_checks == 3:
+                    os.rename(output_dir, moved_dir)
+                    os.symlink(outside_dir, output_dir)
+                return original_require_identity(path, root_fd)
+
+            utils.require_download_root_identity = replace_root_after_publication
+            try:
+                with self.assertRaisesRegex(ValueError, "raced output root"):
+                    utils.download_url(
+                        kaggle_url(),
+                        output_dir=output_dir,
+                        session=FakeSession(response),
+                        credentials={"UserName": "user", "Password": "secret"},
+                    )
+            finally:
+                utils.require_download_root_identity = original_require_identity
+
+            self.assertEqual(3, identity_checks)
+            self.assertFalse(os.path.lexists(os.path.join(moved_dir, filename)))
+            self.assertFalse(os.path.lexists(os.path.join(moved_dir, filename + ".part")))
+            self.assertFalse(os.path.lexists(os.path.join(outside_dir, filename)))
+            self.assertTrue(response.closed)
+
     def test_unzip_rejects_path_traversal(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             archive = os.path.join(tmpdir, "bad.zip")

@@ -254,6 +254,7 @@ def download_url(
             )
             published_final = True
             os.unlink(partial_name, dir_fd=root_fd)
+            require_download_root_identity(output_root, root_fd)
         except Exception:
             if published_final:
                 try:

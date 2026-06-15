@@ -63,6 +63,8 @@
   transfer is not overwritten and the partial file is cleaned.
 - Preserve rollback of the invocation-owned final download name when
   post-publication partial cleanup fails.
+- Preserve post-publication download-root identity checks before returning the
+  final pathname.
 - Preserve rejection of symlinked extraction roots before descriptor traversal.
 
 ## Agent workflow
