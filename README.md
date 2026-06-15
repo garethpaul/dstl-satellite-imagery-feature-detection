@@ -129,6 +129,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - Downloads hold a descriptor-verified output root across cache validation,
   partial writes, cleanup, and atomic publication so root symlinks or
   replacement races cannot redirect archive bytes.
+- Validated downloads publish without replacing a raced final file; competing
+  destination bytes are preserved and the downloader's partial is removed.
 
 ## Security and Privacy Notes
 

@@ -23,6 +23,7 @@ DATASET_VERIFICATION="$ROOT_DIR/DATASET_VERIFICATION.md"
 DATASET_VERIFICATION_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-dataset-integration-verification.md"
 ROOT_SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-15-001-dstl-extraction-root-symlink.md"
 DOWNLOAD_ROOT_PLAN="$ROOT_DIR/docs/plans/2026-06-15-descriptor-rooted-downloads.md"
+DOWNLOAD_NO_CLOBBER_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-finalization-no-clobber.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -67,6 +68,7 @@ for path in \
   "docs/plans/2026-06-14-dstl-dataset-integration-verification.md" \
   "docs/plans/2026-06-15-001-dstl-extraction-root-symlink.md" \
   "docs/plans/2026-06-15-descriptor-rooted-downloads.md" \
+  "docs/plans/2026-06-15-download-finalization-no-clobber.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -489,6 +491,38 @@ if ! grep -Fq 'Downloads hold a descriptor-verified output root' "$ROOT_DIR/READ
   printf '%s\n' "Project guidance must document descriptor-rooted downloads." >&2
   exit 1
 fi
+
+if grep -Fq 'os.rename(' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'os.link(' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'def require_secure_download_support' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'os.link not in os.supports_dir_fd' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'os.rename not in os.supports_dir_fd' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'test_download_does_not_clobber_raced_final_file' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'self.assertEqual(b"competing download", handle.read())' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'self.assertFalse(os.path.lexists(partial_path))' "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Download finalization must fail closed without clobbering raced destination files." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'Validated downloads publish without replacing a raced final file' "$ROOT_DIR/README.md" || \
+  ! grep -Fq 'Download publication must fail when the final name races into existence' "$ROOT_DIR/SECURITY.md" || \
+  ! grep -Fq 'Publish validated downloads without clobbering raced destinations' "$ROOT_DIR/VISION.md" || \
+  ! grep -Fq 'Prevented download finalization from clobbering raced destination files' "$ROOT_DIR/CHANGES.md" || \
+  ! grep -Fq 'Preserve no-clobber download finalization' "$AGENTS"; then
+  printf '%s\n' "Project guidance must document no-clobber download publication." >&2
+  exit 1
+fi
+
+for download_no_clobber_contract in \
+  'status: completed' \
+  '## Status: Completed' \
+  '## Verification Completed' \
+  'hostile mutations were rejected'; do
+  if ! grep -Fq "$download_no_clobber_contract" "$DOWNLOAD_NO_CLOBBER_PLAN"; then
+    printf '%s\n' "Download no-clobber plan must record completed evidence: $download_no_clobber_contract" >&2
+    exit 1
+  fi
+done
 
 if ! grep -Fq 'status: completed' "$ROOT_SYMLINK_PLAN" || \
   ! grep -Fq 'make check' "$ROOT_SYMLINK_PLAN" || \

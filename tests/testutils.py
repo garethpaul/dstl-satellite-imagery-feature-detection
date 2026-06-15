@@ -509,6 +509,31 @@ class DatasetLoadTest(unittest.TestCase):
             self.assertFalse(os.path.lexists(partial_path))
             self.assertTrue(response.closed)
 
+    def test_download_does_not_clobber_raced_final_file(self):
+        response = FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+            partial_path = filepath + ".part"
+
+            def create_final_file():
+                with open(filepath, "wb") as handle:
+                    handle.write(b"competing download")
+
+            session = FakeSession(response, on_post=create_final_file)
+            with self.assertRaises(FileExistsError):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            with open(filepath, "rb") as handle:
+                self.assertEqual(b"competing download", handle.read())
+            self.assertFalse(os.path.lexists(partial_path))
+            self.assertTrue(response.closed)
+
     def test_unzip_rejects_path_traversal(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             archive = os.path.join(tmpdir, "bad.zip")

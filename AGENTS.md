@@ -59,6 +59,8 @@
   must fail closed.
 - Preserve descriptor-rooted download cache and publication operations so
   symlinked or replaced output roots fail before archive bytes are written.
+- Preserve no-clobber download finalization so a destination created during a
+  transfer is not overwritten and the partial file is cleaned.
 - Preserve rejection of symlinked extraction roots before descriptor traversal.
 
 ## Agent workflow

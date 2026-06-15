@@ -1,7 +1,7 @@
 ---
 title: Download Finalization No-Clobber Guard
 type: security
-status: in_progress
+status: completed
 date: 2026-06-15
 execution: code
 ---
@@ -101,4 +101,28 @@ Approach:
 - Concurrent downloaders may both transfer data, but only one can publish the
   final name and the loser fails without overwriting it.
 
-## Status: In Progress
+## Status: Completed
+
+## Work Completed
+
+- Replaced overwrite-capable download publication with descriptor-relative
+  hard-link creation that fails when the final name already exists.
+- Removed the partial name only after successful publication and retained
+  existing exception cleanup for failed races.
+- Added a final-name race regression proving competing bytes survive, the
+  downloader's partial is removed, and the response closes.
+- Split common, download, and extraction capability checks so downloads require
+  descriptor-relative hard links while extraction retains the platform's
+  descriptor-relative rename capability proxy, and updated static contracts
+  and project guidance.
+
+## Verification Completed
+
+- The test-first focused run failed because `os.rename` replaced the competing
+  final file; all 41 focused tests passed after the fix.
+- Python 3.12.8 repository and external-directory `make check` passed Ruff
+  formatting/lint, all 41 tests, bytecode compilation, and dependency audit.
+- Six isolated hostile mutations were rejected for overwrite publication, link
+  capability, race-test, cleanup-assertion, documentation, and completion
+  evidence removal.
+- No credentialed Kaggle request, dataset download, or extraction was executed.

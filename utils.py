@@ -245,12 +245,13 @@ def download_url(
                 require_valid_zip_file(handle)
 
             require_download_root_identity(output_root, root_fd)
-            os.rename(
+            os.link(
                 partial_name,
                 filename,
                 src_dir_fd=root_fd,
                 dst_dir_fd=root_fd,
             )
+            os.unlink(partial_name, dir_fd=root_fd)
         except Exception:
             try:
                 os.unlink(partial_name, dir_fd=root_fd)
@@ -351,17 +352,24 @@ def require_secure_descriptor_support():
         or os.open not in os.supports_dir_fd
         or os.mkdir not in os.supports_dir_fd
         or os.unlink not in os.supports_dir_fd
-        or os.rename not in os.supports_dir_fd
     ):
         raise RuntimeError("Secure descriptor-relative filesystem operations are unavailable.")
 
 
+def require_secure_download_support():
+    require_secure_descriptor_support()
+    if os.link not in os.supports_dir_fd:
+        raise RuntimeError("Secure descriptor-relative download publication is unavailable.")
+
+
 def require_secure_extraction_support():
     require_secure_descriptor_support()
+    if os.rename not in os.supports_dir_fd:
+        raise RuntimeError("Secure descriptor-relative archive publication is unavailable.")
 
 
 def open_download_root(output_root):
-    require_secure_descriptor_support()
+    require_secure_download_support()
     try:
         return open_output_root(output_root)
     except (OSError, ValueError) as exc:
