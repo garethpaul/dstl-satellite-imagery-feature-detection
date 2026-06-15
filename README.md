@@ -117,6 +117,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   traversal, synced same-directory staging, and atomic replacement so a
   destination path swapped after preflight cannot redirect or partially publish
   a member. Unsupported hosts fail closed instead of using pathname extraction.
+- Symlinked extraction roots are rejected before member writes instead of being
+  resolved to an external destination.
 - Downloads reject declared or streamed content over the configured byte
   limit, and extraction rejects archives over the configured expanded-size or
   member-count limits before writing members.

@@ -21,6 +21,7 @@ EXISTING_TYPE_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-existing-target-types.m
 MAKE_ROOT_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-make-root-override-protection.md"
 DATASET_VERIFICATION="$ROOT_DIR/DATASET_VERIFICATION.md"
 DATASET_VERIFICATION_PLAN="$ROOT_DIR/docs/plans/2026-06-14-dstl-dataset-integration-verification.md"
+ROOT_SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-15-001-dstl-extraction-root-symlink.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -63,6 +64,7 @@ for path in \
   "docs/plans/2026-06-14-dstl-existing-target-types.md" \
   "docs/plans/2026-06-14-dstl-make-root-override-protection.md" \
   "docs/plans/2026-06-14-dstl-dataset-integration-verification.md" \
+  "docs/plans/2026-06-15-001-dstl-extraction-root-symlink.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -433,6 +435,31 @@ done
 
 if grep -Fq "zip_ref.extract(member, output_dir)" "$ROOT_DIR/utils.py"; then
   printf '%s\n' "Zip extraction must not return to pathname-based ZipFile.extract." >&2
+  exit 1
+fi
+
+if [ "$(grep -Fc 'os.path.abspath(output_dir)' "$ROOT_DIR/utils.py")" -ne 2 ] || \
+  grep -Fq 'os.path.realpath(output_dir)' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'test_unzip_rejects_symlinked_output_root' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'os.symlink(outside_dir, output_dir)' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'self.assertFalse(os.path.exists(os.path.join(outside_dir, "file.txt")))' "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Descriptor-rooted extraction must reject symlinked output roots before writing." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'status: completed' "$ROOT_SYMLINK_PLAN" || \
+  ! grep -Fq 'make check' "$ROOT_SYMLINK_PLAN" || \
+  ! grep -Fq 'hostile mutations' "$ROOT_SYMLINK_PLAN"; then
+  printf '%s\n' "Extraction-root symlink plan must record completed verification." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'Symlinked extraction roots are rejected before member writes' "$ROOT_DIR/README.md" || \
+  ! grep -Fq 'Symlinked extraction roots must be rejected before descriptor traversal' "$ROOT_DIR/SECURITY.md" || \
+  ! grep -Fq 'Reject symlinked extraction roots before descriptor traversal' "$ROOT_DIR/VISION.md" || \
+  ! grep -Fq 'Rejected symlinked extraction roots before descriptor traversal' "$ROOT_DIR/CHANGES.md" || \
+  ! grep -Fq 'Preserve rejection of symlinked extraction roots' "$AGENTS"; then
+  printf '%s\n' "Project guidance must document extraction-root symlink rejection." >&2
   exit 1
 fi
 

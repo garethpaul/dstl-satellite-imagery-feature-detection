@@ -589,6 +589,22 @@ class DatasetLoadTest(unittest.TestCase):
 
             self.assertFalse(os.path.exists(os.path.join(outside_dir, "file.txt")))
 
+    def test_unzip_rejects_symlinked_output_root(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outside_dir = os.path.join(tmpdir, "outside")
+            output_dir = os.path.join(tmpdir, "output")
+            os.makedirs(outside_dir)
+            os.symlink(outside_dir, output_dir)
+            archive = os.path.join(tmpdir, "root-symlink.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("file.txt", "blocked")
+
+            with self.assertRaisesRegex(ValueError, "raced destination path"):
+                utils.unzip(archive, output_dir=output_dir)
+
+            self.assertTrue(os.path.islink(output_dir))
+            self.assertFalse(os.path.exists(os.path.join(outside_dir, "file.txt")))
+
     def test_unzip_atomically_replaces_existing_regular_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = os.path.join(tmpdir, "file.txt")

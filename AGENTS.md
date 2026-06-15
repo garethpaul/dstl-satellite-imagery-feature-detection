@@ -57,6 +57,7 @@
 - Preserve descriptor-rooted archive extraction, no-follow directory traversal,
   synced same-directory staging, and atomic replacement; unsupported platforms
   must fail closed.
+- Preserve rejection of symlinked extraction roots before descriptor traversal.
 
 ## Agent workflow
 

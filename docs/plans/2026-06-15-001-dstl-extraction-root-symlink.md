@@ -1,6 +1,6 @@
 # Reject Symlinked Extraction Roots
 
-status: planned
+status: completed
 
 ## Problem
 
@@ -41,4 +41,15 @@ boundary.
 
 ## Verification
 
-Pending implementation and bounded validation.
+- The focused root-symlink regression passed and the full offline suite passed
+  all 37 tests, including safe missing-root creation and nested destination-race
+  coverage.
+- Seven hostile mutations were rejected for restored root canonicalization,
+  partial `abspath` coverage, removed or weakened regression setup/assertions,
+  documentation drift, and reopened plan status.
+- `make check` passed under Python 3.12.8 and an isolated Python 3.14.0
+  environment, including Ruff format/check, source compilation, and dependency
+  audits with no known vulnerabilities; Python 3.12 also passed from an
+  external working directory.
+- Verification used no Kaggle credentials, competition data, or live network
+  request.

@@ -1,5 +1,9 @@
 # Changes
 
+## 2026-06-15
+
+- Rejected symlinked extraction roots before descriptor traversal and member writes.
+
 ## 2026-06-14
 
 - Added an exact-head DSTL dataset integration verification matrix that

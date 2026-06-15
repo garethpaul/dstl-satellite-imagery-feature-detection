@@ -258,7 +258,7 @@ def safe_zip_members(
     max_extracted_bytes=DEFAULT_MAX_EXTRACTED_BYTES,
     max_archive_members=DEFAULT_MAX_ARCHIVE_MEMBERS,
 ):
-    output_root = os.path.realpath(output_dir)
+    output_root = os.path.abspath(output_dir)
     max_extracted_bytes = normalize_positive_integer(max_extracted_bytes, "Maximum extracted size")
     max_archive_members = normalize_positive_integer(
         max_archive_members, "Maximum archive member count"
@@ -451,7 +451,7 @@ def unzip(
     output_dir = output_dir or os.getcwd()
     logging.info("Extracting file: %s", filename)
     require_secure_extraction_support()
-    output_root = os.path.realpath(output_dir)
+    output_root = os.path.abspath(output_dir)
 
     with zipfile.ZipFile(filename, "r") as zip_ref:
         members = list(
