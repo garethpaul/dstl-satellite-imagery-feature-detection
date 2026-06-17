@@ -659,6 +659,8 @@ for response_close_contract in \
   '## Status: Completed' \
   '## Verification Completed' \
   'hostile mutations were rejected' \
+  'b0e479d06f99967d39b704e7e2ae176960719511' \
+  'pull-request workflow run `27572525408`' \
   'No credentialed Kaggle request'; do
   if ! grep -Fq "$response_close_contract" "$RESPONSE_CLOSE_ROLLBACK_PLAN"; then
     printf '%s\n' "Response-close rollback plan must record completed evidence: $response_close_contract" >&2

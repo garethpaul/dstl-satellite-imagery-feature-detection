@@ -61,5 +61,11 @@ before returning the pathname.
 - Repository-root and external-directory `make check` both passed Ruff format and
   lint, all 46 offline tests, Python compilation, and dependency audit with no
   known vulnerabilities.
+- The implementation was committed as
+  `b0e479d06f99967d39b704e7e2ae176960719511`.
+- The repository's canonical pull-request workflow run `27572525408` passed on
+  that exact implementation head across Python 3.10, 3.12, and 3.14. PR #16
+  remained open, clean, and mergeable, and the branch had no open code-scanning
+  alerts. This workflow does not define a separate push event.
 - No credentialed Kaggle request, dataset download, archive extraction, or private
   dataset access was performed.
