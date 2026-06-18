@@ -28,6 +28,7 @@ DOWNLOAD_PARTIAL_ISOLATION_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-partia
 DOWNLOAD_ROLLBACK_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-finalization-rollback.md"
 POST_PUBLICATION_ROOT_PLAN="$ROOT_DIR/docs/plans/2026-06-15-post-publication-download-root-check.md"
 RESPONSE_CLOSE_ROLLBACK_PLAN="$ROOT_DIR/docs/plans/2026-06-15-download-response-close-rollback.md"
+RUFF_REFRESH_PLAN="$ROOT_DIR/docs/plans/2026-06-18-ruff-patch-refresh.md"
 WORKFLOW="$ROOT_DIR/.github/workflows/check.yml"
 AGENTS="$ROOT_DIR/AGENTS.md"
 
@@ -77,6 +78,7 @@ for path in \
   "docs/plans/2026-06-15-download-finalization-rollback.md" \
   "docs/plans/2026-06-15-post-publication-download-root-check.md" \
   "docs/plans/2026-06-15-download-response-close-rollback.md" \
+  "docs/plans/2026-06-18-ruff-patch-refresh.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
 done
@@ -243,9 +245,23 @@ done
 for dependency_contract in \
   "requests==2.34.2" \
   "pip-audit==2.10.0" \
-  "ruff==0.15.15"; do
+  "ruff==0.15.16"; do
   if ! grep -Fq "$dependency_contract" "$ROOT_DIR/requirements.txt" "$ROOT_DIR/requirements-dev.txt"; then
     printf '%s\n' "Dependency contract is missing: $dependency_contract" >&2
+    exit 1
+  fi
+done
+
+for ruff_plan_contract in \
+  "status: completed" \
+  "## Status: Completed" \
+  "## Work Completed" \
+  "## Verification Completed" \
+  "Ruff 0.15.16" \
+  "Preserved Requests 2.34.2 and pip-audit 2.10.0 exactly" \
+  "Five isolated dependency-contract mutations were rejected"; do
+  if ! grep -Fq "$ruff_plan_contract" "$RUFF_REFRESH_PLAN"; then
+    printf '%s\n' "Ruff refresh plan must record completed evidence: $ruff_plan_contract" >&2
     exit 1
   fi
 done

@@ -1,5 +1,10 @@
 # Changes
 
+## 2026-06-18
+
+- Refreshed the pinned Ruff verification tool to 0.15.16 while preserving the
+  runtime dependency, audit tool, 46-test suite, and offline dataset boundary.
+
 ## 2026-06-15
 
 - Rolled back published downloads when response finalization failed and moved
