@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-06-19
+
+- Preserved primary download errors when response cleanup also fails and made
+  rollback unlink only the invocation-owned inode, with final inode verification
+  after successful response cleanup.
+- Preserved unknown legacy or collided partial files instead of deleting paths
+  not created by the current invocation.
+- Rejected short response bodies that disagree with `Content-Length`.
+- Rejected ZIP special-file members and portable case or Unicode-normalization
+  target collisions before extraction.
+
 ## 2026-06-18
 
 - Refreshed the pinned Ruff verification tool to 0.15.16 while preserving the

@@ -43,9 +43,10 @@ Kaggle credentials are loaded. Download requests must use a positive finite time
 value or `(connect, read)` pair before requests are posted.
 Supplied Kaggle credentials are normalized and rejected when blank before requests
 are posted. Zip extraction preflights every member before writing files and
-rejects path traversal, archive symlink members, existing symlinks, and
-colliding destination paths, including file and directory prefix collisions,
-plus existing destination type collisions.
+rejects path traversal, archive symlink members and special-file members,
+existing symlinks, and colliding destination paths, including portable case and
+Unicode normalization collisions, file and directory prefix collisions, plus
+existing destination type collisions.
 The descriptor-relative no-follow extraction then
 holds verified parent directories open, syncs staged files, and atomically
 publishes members; unsupported platforms fail closed. GitHub Actions runs the full verification gate on Python
@@ -58,6 +59,8 @@ Download publication must fail when the final name races into existence;
 validated partial files must never overwrite competing destination bytes.
 Per-attempt secret-suffixed partial names isolate concurrent downloads so one
 request cannot publish or remove another request's in-flight file.
+Legacy or collided partial names not created by the current invocation must not
+be deleted. Declared response lengths must exactly match streamed bytes.
 If cleanup fails after publication, the downloader must remove the final name
 owned by that invocation before propagating the failure.
 The download root must be revalidated after final publication so a path
@@ -65,6 +68,9 @@ replacement present at that validation is detected and the owned final name is
 rolled back before an invalid pathname is returned.
 Response finalization failures must roll back an invocation-owned published download,
 and root identity must be checked again after a successful response close.
+Rollback cleanup must verify file identity before unlinking so a raced
+replacement is preserved, close failures must not replace an earlier error, and
+the published inode must be revalidated after successful response cleanup.
 Symlinked extraction roots must be rejected before descriptor traversal.
 Cached and newly streamed payloads must also be non-empty ZIP archives before
 they are reused or atomically promoted.

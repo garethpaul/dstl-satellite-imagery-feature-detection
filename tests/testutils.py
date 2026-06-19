@@ -1,5 +1,6 @@
 import io
 import os
+import stat
 import tempfile
 import threading
 import unittest
@@ -246,7 +247,7 @@ class DatasetLoadTest(unittest.TestCase):
         self.assertTrue(response.status_checked)
         self.assertTrue(response.closed)
 
-    def test_download_removes_stale_partial_file_before_retry(self):
+    def test_download_preserves_unowned_legacy_partial_file(self):
         payload = zip_payload(b"fresh")
         response = FakeResponse([payload])
         session = FakeSession(response)
@@ -265,7 +266,24 @@ class DatasetLoadTest(unittest.TestCase):
 
             with open(filepath, "rb") as handle:
                 self.assertEqual(payload, handle.read())
-            self.assertFalse(os.path.exists(filepath + ".part"))
+            with open(filepath + ".part", "rb") as handle:
+                self.assertEqual(b"stale", handle.read())
+
+    def test_download_rejects_short_body_for_declared_content_length(self):
+        payload = zip_payload(b"short")
+        response = FakeResponse([payload], headers={"Content-Length": str(len(payload) + 1)})
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(ValueError, "Content-Length"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=FakeSession(response),
+                    credentials={"UserName": "user", "Password": "pass"},
+                )
+
+            self.assertEqual([], os.listdir(tmpdir))
+            self.assertTrue(response.closed)
 
     def test_download_rejects_invalid_cached_zip_before_credentials(self):
         response = FakeResponse()
@@ -484,7 +502,7 @@ class DatasetLoadTest(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(moved_dir, "sample_submission.csv.zip")))
             self.assertTrue(response.closed)
 
-    def test_download_exclusively_creates_partial_file(self):
+    def test_download_does_not_remove_unowned_partial_collision(self):
         response = FakeResponse()
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -512,7 +530,7 @@ class DatasetLoadTest(unittest.TestCase):
 
             with open(outside_path, "rb") as handle:
                 self.assertEqual(b"outside", handle.read())
-            self.assertFalse(os.path.lexists(partial_path))
+            self.assertTrue(os.path.islink(partial_path))
             self.assertTrue(response.closed)
 
     def test_download_does_not_clobber_raced_final_file(self):
@@ -599,6 +617,78 @@ class DatasetLoadTest(unittest.TestCase):
 
             self.assertFalse(os.path.lexists(filepath))
             self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
+            self.assertTrue(response.closed)
+
+    def test_download_preserves_primary_failure_when_response_close_also_fails(self):
+        class FailingStreamAndCloseResponse(FailingResponse):
+            def close(self):
+                self.closed = True
+                raise OSError("injected response close failure")
+
+        response = FailingStreamAndCloseResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(RuntimeError, "download interrupted"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=FakeSession(response),
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            self.assertEqual([], os.listdir(tmpdir))
+            self.assertTrue(response.closed)
+
+    def test_download_rollback_preserves_raced_replacement_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+
+            class ReplacingFailingCloseResponse(FakeResponse):
+                def close(self):
+                    os.unlink(filepath)
+                    with open(filepath, "wb") as handle:
+                        handle.write(b"replacement")
+                    self.closed = True
+                    raise RuntimeError("injected response close failure")
+
+            response = ReplacingFailingCloseResponse()
+
+            with self.assertRaisesRegex(RuntimeError, "injected response close failure"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=FakeSession(response),
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            with open(filepath, "rb") as handle:
+                self.assertEqual(b"replacement", handle.read())
+            self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
+            self.assertTrue(response.closed)
+
+    def test_download_rejects_raced_replacement_after_successful_response_close(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+
+            class ReplacingCloseResponse(FakeResponse):
+                def close(self):
+                    os.unlink(filepath)
+                    with open(filepath, "wb") as handle:
+                        handle.write(b"replacement")
+                    super().close()
+
+            response = ReplacingCloseResponse()
+
+            with self.assertRaisesRegex(ValueError, "published download"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=FakeSession(response),
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            with open(filepath, "rb") as handle:
+                self.assertEqual(b"replacement", handle.read())
             self.assertTrue(response.closed)
 
     def test_download_rolls_back_when_output_root_changes_during_response_close(self):
@@ -763,6 +853,21 @@ class DatasetLoadTest(unittest.TestCase):
 
             self.assertFalse(os.path.lexists(os.path.join(tmpdir, "link")))
 
+    def test_unzip_rejects_special_file_members(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            archive = os.path.join(tmpdir, "fifo.zip")
+            member = zipfile.ZipInfo("named-pipe")
+            member.create_system = 3
+            member.external_attr = (stat.S_IFIFO | 0o600) << 16
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr(member, b"")
+
+            with self.assertRaisesRegex(ValueError, "special file"):
+                utils.unzip(archive, output_dir=output_dir)
+
+            self.assertFalse(os.path.exists(output_dir))
+
     def test_unzip_rejects_existing_symlink_in_destination_path(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = os.path.join(tmpdir, "output")
@@ -806,6 +911,25 @@ class DatasetLoadTest(unittest.TestCase):
                 utils.unzip(archive, output_dir=output_dir)
 
             self.assertFalse(os.path.exists(os.path.join(output_dir, "safe.txt")))
+
+    def test_unzip_rejects_portable_case_and_unicode_target_collisions(self):
+        member_pairs = (
+            ("Image.tif", "image.tif"),
+            ("caf\N{LATIN SMALL LETTER E WITH ACUTE}.txt", "cafe\N{COMBINING ACUTE ACCENT}.txt"),
+        )
+
+        for members in member_pairs:
+            with self.subTest(members=members), tempfile.TemporaryDirectory() as tmpdir:
+                output_dir = os.path.join(tmpdir, "output")
+                archive = os.path.join(tmpdir, "portable-collision.zip")
+                with zipfile.ZipFile(archive, "w") as zip_ref:
+                    zip_ref.writestr(members[0], "first")
+                    zip_ref.writestr(members[1], "second")
+
+                with self.assertRaisesRegex(ValueError, "colliding target paths"):
+                    utils.unzip(archive, output_dir=output_dir)
+
+                self.assertFalse(os.path.exists(output_dir))
 
     def test_unzip_rejects_file_directory_prefix_collisions_before_writing(self):
         member_orders = (

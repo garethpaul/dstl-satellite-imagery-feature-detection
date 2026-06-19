@@ -51,7 +51,8 @@
 - HTTPS download URLs are enforced before credentials are posted, and live download URLs must use Kaggle hosts without embedded URL credentials.
 - File-loaded and supplied credentials are normalized before any request is posted, and blank credentials are rejected.
 - Live download filenames must match the checked-in DSTL archive list.
-- Zip extraction rejects path traversal and symlink members before writing files.
+- Zip extraction rejects path traversal, symlink or special-file members, and
+  portable case or Unicode-normalization collisions before writing files.
 - Preserve preflight rejection of existing destination type collisions so a
   late file/directory mismatch cannot leave earlier archive members written.
 - Preserve descriptor-rooted archive extraction, no-follow directory traversal,
@@ -63,6 +64,10 @@
   transfer is not overwritten and the partial file is cleaned.
 - Ensure secret-suffixed partial names isolate concurrent downloads so one
   request cannot publish or remove another request's temporary file.
+- Never delete legacy or collided partial names that this invocation did not
+  create, and preserve earlier failures if response cleanup also fails.
+- Preserve exact `Content-Length` checks, identity-checked rollback cleanup, and
+  final published-inode verification after response cleanup.
 - Preserve rollback of the invocation-owned final download name when
   post-publication partial cleanup fails.
 - Preserve post-publication download-root identity checks before returning the

@@ -169,7 +169,8 @@ for payload_contract in \
   "test_download_rejects_invalid_cached_zip_before_credentials" \
   "test_download_reuses_valid_cached_zip_before_credentials" \
   "test_download_rejects_invalid_streamed_zip_and_removes_partial_file" \
-  "test_download_rejects_empty_streamed_zip"; do
+  "test_download_rejects_empty_streamed_zip" \
+  "test_download_rejects_short_body_for_declared_content_length"; do
   if ! grep -Fq "$payload_contract" "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"; then
     printf '%s\n' "Download payload contract is missing: $payload_contract" >&2
     exit 1
@@ -203,7 +204,7 @@ for download_path_contract in \
   "os.unlink(partial_name, dir_fd=root_fd)" \
   "os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW" \
   "test_download_rejects_existing_symlink_cache_before_request" \
-  "test_download_exclusively_creates_partial_file"; do
+  "test_download_does_not_remove_unowned_partial_collision"; do
   if ! grep -Fq "$download_path_contract" "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"; then
     printf '%s\n' "Download-path contract is missing: $download_path_contract" >&2
     exit 1
@@ -380,8 +381,9 @@ if ! grep -Fq 'partial_name = ".{0}.{1}.part".format(filename, secrets.token_hex
 fi
 
 if grep -Eq '^[[:space:]]*partial_name = filename \+ "\.part"$' "$ROOT_DIR/utils.py" || \
-  ! grep -Fq 'legacy_partial_name = filename + ".part"' "$ROOT_DIR/utils.py" || \
+  grep -Fq 'legacy_partial_name = filename + ".part"' "$ROOT_DIR/utils.py" || \
   ! grep -Fq 'test_concurrent_downloads_do_not_share_partial_files' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'test_download_preserves_unowned_legacy_partial_file' "$ROOT_DIR/tests/testutils.py" || \
   [ "$(grep -Fc 'threading.Event()' "$ROOT_DIR/tests/testutils.py")" -lt 4 ] || \
   ! grep -Fq 'self.assertIsInstance(errors.get("second"), FileExistsError)' "$ROOT_DIR/tests/testutils.py"; then
   printf '%s\n' "Concurrent downloads must use isolated partial names with regression coverage." >&2
@@ -440,10 +442,17 @@ if ! grep -Fq "stat.S_ISLNK" "$ROOT_DIR/utils.py" ||
   exit 1
 fi
 
+if ! grep -Fq "Refusing to extract zip special file member" "$ROOT_DIR/utils.py" || \
+  ! grep -Fq "test_unzip_rejects_special_file_members" "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Zip extraction must reject special file members before writing files." >&2
+  exit 1
+fi
+
 if ! grep -Fq "seen_targets = set()" "$ROOT_DIR/utils.py" ||
-  ! grep -Fq "os.path.normcase(target_path)" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "portable_path_key(target_path, output_root)" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "colliding target paths" "$ROOT_DIR/utils.py" ||
-  ! grep -Fq "test_unzip_rejects_colliding_target_paths_before_writing" "$ROOT_DIR/tests/testutils.py"; then
+  ! grep -Fq "test_unzip_rejects_colliding_target_paths_before_writing" "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq "test_unzip_rejects_portable_case_and_unicode_target_collisions" "$ROOT_DIR/tests/testutils.py"; then
   printf '%s\n' "Zip extraction must reject colliding normalized targets before writing files." >&2
   exit 1
 fi
@@ -588,7 +597,7 @@ done
 if ! grep -Fq 'published_final = False' "$ROOT_DIR/utils.py" || \
   ! grep -Fq 'published_final = True' "$ROOT_DIR/utils.py" || \
   ! grep -Fq 'if published_final:' "$ROOT_DIR/utils.py" || \
-  ! grep -Fq 'os.unlink(filename, dir_fd=root_fd)' "$ROOT_DIR/utils.py" || \
+  ! grep -Fq 'unlink_if_fingerprint_matches(root_fd, filename, published_fingerprint)' "$ROOT_DIR/utils.py" || \
   ! grep -Fq 'test_download_rolls_back_final_file_when_partial_cleanup_fails' "$ROOT_DIR/tests/testutils.py" || \
   ! grep -Fq 'self.assertFalse(os.path.lexists(filepath))' "$ROOT_DIR/tests/testutils.py"; then
   printf '%s\n' "Download finalization failures must roll back the final name owned by this invocation." >&2
@@ -614,8 +623,8 @@ order = [
     "published_final = True",
     "os.unlink(partial_name, dir_fd=root_fd)",
     "if published_final:",
-    "os.unlink(filename, dir_fd=root_fd)",
-    "os.unlink(partial_name, dir_fd=root_fd)",
+    "unlink_if_fingerprint_matches(root_fd, filename, published_fingerprint)",
+    "unlink_if_identity_matches(root_fd, partial_name, partial_identity)",
 ]
 positions = []
 start = 0
@@ -688,7 +697,11 @@ if ! grep -Fq 'response_close_attempted = False' "$ROOT_DIR/utils.py" || \
   ! grep -Fq 'response_close_attempted = True' "$ROOT_DIR/utils.py" || \
   ! grep -Fq 'if not response_close_attempted:' "$ROOT_DIR/utils.py" || \
   ! grep -Fq 'test_download_rolls_back_final_file_when_response_close_fails' "$ROOT_DIR/tests/testutils.py" || \
-  ! grep -Fq 'test_download_rolls_back_when_output_root_changes_during_response_close' "$ROOT_DIR/tests/testutils.py"; then
+  ! grep -Fq 'test_download_rolls_back_when_output_root_changes_during_response_close' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'test_download_preserves_primary_failure_when_response_close_also_fails' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'test_download_rollback_preserves_raced_replacement_file' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'test_download_rejects_raced_replacement_after_successful_response_close' "$ROOT_DIR/tests/testutils.py" || \
+  ! grep -Fq 'require_file_fingerprint(root_fd, filename, published_fingerprint)' "$ROOT_DIR/utils.py"; then
   printf '%s\n' "Response finalization must remain inside owned-publication rollback and root verification." >&2
   exit 1
 fi
