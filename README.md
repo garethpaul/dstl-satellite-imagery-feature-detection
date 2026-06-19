@@ -87,7 +87,7 @@ make build
 python3 -m py_compile utils.py tests/testutils.py
 ```
 
-`make check` runs the source baseline, Ruff formatting and lint checks, 22
+`make check` runs the source baseline, Ruff formatting and lint checks, 52
 offline unit tests, bytecode compilation, and a `pip-audit` scan of declared
 dependencies. Default tests use
 fake HTTP responses and temporary files. They do not require Kaggle
@@ -110,8 +110,16 @@ When the required SDK or runtime is unavailable, use static checks and source re
   posted, and blank credentials are rejected.
 - Live download filenames must match the checked-in DSTL archive list.
 - Zip extraction preflights every member before writing files and rejects path
-  traversal, archive symlink members, and existing symlinks in destination
-  paths.
+  traversal, archive symlink members and special-file members, existing symlinks
+  in destination paths, colliding destination paths including portable case or
+  Unicode-normalization collisions, file and directory prefix collisions, and
+  existing destination type collisions.
+- Supported POSIX hosts use descriptor-rooted extraction with no-follow parent
+  traversal, synced same-directory staging, and atomic replacement so a
+  destination path swapped after preflight cannot redirect or partially publish
+  a member. Unsupported hosts fail closed instead of using pathname extraction.
+- Symlinked extraction roots are rejected before member writes instead of being
+  resolved to an external destination.
 - Downloads reject declared or streamed content over the configured byte
   limit, and extraction rejects archives over the configured expanded-size or
   member-count limits before writing members.
@@ -119,6 +127,26 @@ When the required SDK or runtime is unavailable, use static checks and source re
   files use exclusive creation and are removed when a stream, payload check, or
   path race fails. Cached and newly downloaded files must be non-empty ZIP
   archives, preventing HTML login/error bodies from becoming reusable data.
+- Downloads hold a descriptor-verified output root across cache validation,
+  partial writes, cleanup, and atomic publication so root symlinks or
+  replacement races cannot redirect archive bytes.
+- Validated downloads publish without replacing a raced final file; competing
+  destination bytes are preserved and the downloader's partial is removed.
+- Per-attempt secret-suffixed partial names isolate concurrent downloads so one
+  request cannot publish or clean up another request's in-flight file.
+- Unknown legacy or collided partial names are preserved rather than deleted as
+  though they were owned by the current invocation.
+- Declared `Content-Length` values must match the streamed byte count exactly.
+- If post-publication partial cleanup fails, the downloader removes the final
+  name it created before reporting the failure and retrying partial cleanup.
+- The descriptor-held download root is revalidated after publication; a
+  replacement present at that boundary fails closed and rolls back the owned
+  final name.
+- Successful downloads close the response inside the publication rollback scope,
+  then revalidate the descriptor-held root before returning the final pathname.
+- Cleanup uses file identity checks so rollback cannot delete a replacement file,
+  response-close failures do not mask an earlier download error, and the final
+  published inode is revalidated after response cleanup.
 
 ## Security and Privacy Notes
 
@@ -152,6 +180,12 @@ When the required SDK or runtime is unavailable, use static checks and source re
   validation and exclusive partial-file creation.
 - See `docs/plans/2026-06-12-dstl-download-payload-validation.md` for cached and
   streamed ZIP payload validation.
+- See `docs/plans/2026-06-13-dstl-archive-target-collisions.md` for normalized
+  archive destination uniqueness.
+- Use [`DATASET_VERIFICATION.md`](DATASET_VERIFICATION.md) for exact-head
+  credentialed download, extraction, private dataset inventory, resource, and
+  loader evidence. It requires a private authorized environment and sanitized
+  counts and size buckets.
 
 ## Contributing
 

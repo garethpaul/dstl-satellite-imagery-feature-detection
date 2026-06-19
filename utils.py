@@ -1,8 +1,11 @@
 import configparser
+import errno
 import logging
 import math
 import os
+import secrets
 import stat
+import unicodedata
 import zipfile
 from urllib.parse import parse_qs, urlparse
 
@@ -160,13 +163,18 @@ def require_allowed_data_file(filename):
         raise ValueError("Download filename must be in the configured DSTL data file list.")
 
 
-def require_valid_zip_file(path):
+def require_valid_zip_file(source):
     try:
-        with zipfile.ZipFile(path, "r") as zip_ref:
+        with zipfile.ZipFile(source, "r") as zip_ref:
             if not zip_ref.infolist():
                 raise ValueError("Downloaded file must be a non-empty ZIP archive.")
     except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
         raise ValueError("Downloaded file must be a valid ZIP archive.") from exc
+
+
+def portable_path_key(path, root):
+    relative_path = os.path.relpath(path, root)
+    return unicodedata.normalize("NFC", relative_path).casefold()
 
 
 def download_url(
@@ -182,72 +190,116 @@ def download_url(
     timeout = normalize_timeout(timeout)
     max_download_bytes = normalize_positive_integer(max_download_bytes, "Maximum download size")
 
-    output_dir = output_dir or os.getcwd()
-    os.makedirs(output_dir, exist_ok=True)
-
     filename = filename_from_url(url)
     require_allowed_data_file(filename)
-    filepath = os.path.join(output_dir, filename)
-    partial_path = filepath + ".part"
-
-    if os.path.lexists(filepath):
-        existing_mode = os.lstat(filepath).st_mode
-        if stat.S_ISLNK(existing_mode) or not stat.S_ISREG(existing_mode):
-            raise ValueError("Existing download path must be a regular non-symlink file.")
-        require_valid_zip_file(filepath)
-        logging.warning("File %s exists", filepath)
-        return filepath
-
-    if os.path.lexists(partial_path):
-        os.remove(partial_path)
-
-    credentials = (
-        normalize_credentials(credentials)
-        if credentials is not None
-        else load_credentials(credentials_file)
-    )
-    client = session or requests
-
-    response = client.post(url, data=credentials, stream=True, timeout=timeout)
+    output_root = os.path.abspath(output_dir or os.getcwd())
+    filepath = os.path.join(output_root, filename)
+    partial_name = ".{0}.{1}.part".format(filename, secrets.token_hex(8))
+    root_fd = open_download_root(output_root)
     try:
-        response.raise_for_status()
+        cached_fd = open_cached_download(root_fd, filename)
+        if cached_fd is not None:
+            with os.fdopen(cached_fd, "rb") as handle:
+                require_valid_zip_file(handle)
+            require_download_root_identity(output_root, root_fd)
+            logging.warning("File %s exists", filepath)
+            return filepath
 
-        content_length = response.headers.get("Content-Length")
-        if content_length is not None:
-            try:
-                declared_size = int(content_length)
-            except ValueError as exc:
-                raise ValueError("Download Content-Length must be an integer.") from exc
-            if declared_size < 0 or declared_size > max_download_bytes:
-                raise ValueError("Download exceeds the configured size limit.")
+        credentials = (
+            normalize_credentials(credentials)
+            if credentials is not None
+            else load_credentials(credentials_file)
+        )
+        client = session or requests
+        response = client.post(url, data=credentials, stream=True, timeout=timeout)
+        published_final = False
+        published_fingerprint = None
+        partial_identity = None
+        response_close_attempted = False
+        primary_error = None
+        try:
+            response.raise_for_status()
+            require_download_root_identity(output_root, root_fd)
 
-        logging.info("Load file %s", filename)
-        downloaded_bytes = 0
-        open_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-        if hasattr(os, "O_NOFOLLOW"):
-            open_flags |= os.O_NOFOLLOW
-        partial_fd = os.open(partial_path, open_flags, 0o600)
-        with os.fdopen(partial_fd, "wb") as handle:
-            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                if chunk:
-                    downloaded_bytes += len(chunk)
-                    if downloaded_bytes > max_download_bytes:
-                        raise ValueError("Download exceeds the configured size limit.")
-                    handle.write(chunk)
-        require_valid_zip_file(partial_path)
-        os.replace(partial_path, filepath)
-    except Exception:
-        if os.path.lexists(partial_path):
-            os.remove(partial_path)
-        raise
+            content_length = response.headers.get("Content-Length")
+            declared_size = None
+            if content_length is not None:
+                try:
+                    declared_size = int(content_length)
+                except ValueError as exc:
+                    raise ValueError("Download Content-Length must be an integer.") from exc
+                if declared_size < 0 or declared_size > max_download_bytes:
+                    raise ValueError("Download exceeds the configured size limit.")
+
+            logging.info("Load file %s", filename)
+            downloaded_bytes = 0
+            partial_fd = os.open(
+                partial_name,
+                os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600,
+                dir_fd=root_fd,
+            )
+            partial_identity = file_identity(os.fstat(partial_fd))
+            with os.fdopen(partial_fd, "w+b") as handle:
+                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                    if chunk:
+                        downloaded_bytes += len(chunk)
+                        if downloaded_bytes > max_download_bytes:
+                            raise ValueError("Download exceeds the configured size limit.")
+                        handle.write(chunk)
+                if declared_size is not None and downloaded_bytes != declared_size:
+                    raise ValueError("Download body does not match Content-Length.")
+                handle.flush()
+                os.fsync(handle.fileno())
+                handle.seek(0)
+                require_valid_zip_file(handle)
+
+            require_download_root_identity(output_root, root_fd)
+            os.link(
+                partial_name,
+                filename,
+                src_dir_fd=root_fd,
+                dst_dir_fd=root_fd,
+            )
+            published_final = True
+            published_fingerprint = file_fingerprint(
+                os.stat(filename, dir_fd=root_fd, follow_symlinks=False)
+            )
+            os.unlink(partial_name, dir_fd=root_fd)
+            published_fingerprint = file_fingerprint(
+                os.stat(filename, dir_fd=root_fd, follow_symlinks=False)
+            )
+            close = getattr(response, "close", None)
+            if close:
+                response_close_attempted = True
+                close()
+            require_download_root_identity(output_root, root_fd)
+            require_file_fingerprint(root_fd, filename, published_fingerprint)
+        except BaseException as exc:
+            primary_error = exc
+            if published_final:
+                unlink_if_fingerprint_matches(root_fd, filename, published_fingerprint)
+            unlink_if_identity_matches(root_fd, partial_name, partial_identity)
+            raise
+        finally:
+            if not response_close_attempted:
+                close = getattr(response, "close", None)
+                if close:
+                    try:
+                        close()
+                    except BaseException:
+                        if primary_error is None:
+                            raise
+                        logging.debug(
+                            "Response close failed while preserving the primary download error.",
+                            exc_info=True,
+                        )
+
+        logging.info("FINISH file %s", filename)
+        logging.info("File size: %d kb", os.stat(filename, dir_fd=root_fd).st_size)
+        return filepath
     finally:
-        close = getattr(response, "close", None)
-        if close:
-            close()
-
-    logging.info("FINISH file %s", filename)
-    logging.info("File size: %d kb", os.path.getsize(filepath))
-    return filepath
+        os.close(root_fd)
 
 
 def safe_zip_members(
@@ -256,7 +308,7 @@ def safe_zip_members(
     max_extracted_bytes=DEFAULT_MAX_EXTRACTED_BYTES,
     max_archive_members=DEFAULT_MAX_ARCHIVE_MEMBERS,
 ):
-    output_root = os.path.realpath(output_dir)
+    output_root = os.path.abspath(output_dir)
     max_extracted_bytes = normalize_positive_integer(max_extracted_bytes, "Maximum extracted size")
     max_archive_members = normalize_positive_integer(
         max_archive_members, "Maximum archive member count"
@@ -270,19 +322,279 @@ def safe_zip_members(
     if total_size > max_extracted_bytes:
         raise ValueError("Zip archive exceeds the configured extracted size limit.")
 
+    seen_targets = set()
+    file_targets = set()
+    required_directories = set()
     for member in members:
-        if stat.S_ISLNK(member.external_attr >> 16):
+        member_mode = member.external_attr >> 16
+        if stat.S_ISLNK(member_mode):
             raise ValueError("Refusing to extract zip symlink member.")
+        member_type = stat.S_IFMT(member_mode)
+        if member.create_system == 3 and member_type not in (0, stat.S_IFREG, stat.S_IFDIR):
+            raise ValueError("Refusing to extract zip special file member.")
+        if member.create_system == 3 and bool(member_type == stat.S_IFDIR) != member.is_dir():
+            raise ValueError("Refusing to extract zip member with inconsistent file type metadata.")
         target_path = os.path.abspath(os.path.join(output_root, member.filename))
         if os.path.commonpath((output_root, target_path)) != output_root:
             raise ValueError("Refusing to extract zip member outside output directory.")
+        target_key = portable_path_key(target_path, output_root)
+        if target_key in seen_targets:
+            raise ValueError("Refusing to extract zip members with colliding target paths.")
+        seen_targets.add(target_key)
+
+        relative_parts = [
+            part
+            for part in os.path.relpath(target_path, output_root).split(os.sep)
+            if part not in ("", ".")
+        ]
+        parent_path = output_root
+        for part in relative_parts[:-1]:
+            parent_path = os.path.join(parent_path, part)
+            parent_key = portable_path_key(parent_path, output_root)
+            if parent_key in file_targets:
+                raise ValueError(
+                    "Refusing to extract zip members with file and directory prefix collisions."
+                )
+            required_directories.add(parent_key)
+
+        if member.is_dir():
+            required_directories.add(target_key)
+        else:
+            if target_key in required_directories:
+                raise ValueError(
+                    "Refusing to extract zip members with file and directory prefix collisions."
+                )
+            file_targets.add(target_key)
 
         current_path = output_root
-        for part in os.path.relpath(target_path, output_root).split(os.sep):
+        target_parts = os.path.relpath(target_path, output_root).split(os.sep)
+        for index, part in enumerate(target_parts):
             current_path = os.path.join(current_path, part)
             if os.path.islink(current_path):
                 raise ValueError("Refusing to extract through an existing symlink.")
+            if not os.path.lexists(current_path):
+                continue
+
+            must_be_directory = index < len(target_parts) - 1 or member.is_dir()
+            if must_be_directory != os.path.isdir(current_path):
+                raise ValueError(
+                    "Refusing to extract through an existing destination type collision."
+                )
         yield member
+
+
+def require_secure_descriptor_support():
+    if (
+        not hasattr(os, "O_DIRECTORY")
+        or not hasattr(os, "O_NOFOLLOW")
+        or os.open not in os.supports_dir_fd
+        or os.mkdir not in os.supports_dir_fd
+        or os.unlink not in os.supports_dir_fd
+    ):
+        raise RuntimeError("Secure descriptor-relative filesystem operations are unavailable.")
+
+
+def require_secure_download_support():
+    require_secure_descriptor_support()
+    if os.link not in os.supports_dir_fd:
+        raise RuntimeError("Secure descriptor-relative download publication is unavailable.")
+
+
+def require_secure_extraction_support():
+    require_secure_descriptor_support()
+    if os.rename not in os.supports_dir_fd:
+        raise RuntimeError("Secure descriptor-relative archive publication is unavailable.")
+
+
+def open_download_root(output_root):
+    require_secure_download_support()
+    try:
+        return open_output_root(output_root)
+    except (OSError, ValueError) as exc:
+        raise ValueError("Refusing to use a raced output root.") from exc
+
+
+def require_download_root_identity(output_root, root_fd):
+    try:
+        path_stat = os.stat(output_root, follow_symlinks=False)
+    except OSError as exc:
+        raise ValueError("Refusing to use a raced output root.") from exc
+    descriptor_stat = os.fstat(root_fd)
+    if not stat.S_ISDIR(path_stat.st_mode) or (
+        path_stat.st_dev,
+        path_stat.st_ino,
+    ) != (descriptor_stat.st_dev, descriptor_stat.st_ino):
+        raise ValueError("Refusing to use a raced output root.")
+
+
+def file_identity(file_stat):
+    return file_stat.st_dev, file_stat.st_ino
+
+
+def file_fingerprint(file_stat):
+    return file_identity(file_stat), file_stat.st_ctime_ns, file_stat.st_size
+
+
+def unlink_if_identity_matches(root_fd, filename, expected_identity):
+    if expected_identity is None:
+        return False
+    try:
+        current_stat = os.stat(filename, dir_fd=root_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return False
+    if file_identity(current_stat) != expected_identity:
+        return False
+    os.unlink(filename, dir_fd=root_fd)
+    return True
+
+
+def unlink_if_fingerprint_matches(root_fd, filename, expected_fingerprint):
+    if expected_fingerprint is None:
+        return False
+    try:
+        current_stat = os.stat(filename, dir_fd=root_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return False
+    if file_fingerprint(current_stat) != expected_fingerprint:
+        return False
+    os.unlink(filename, dir_fd=root_fd)
+    return True
+
+
+def require_file_fingerprint(root_fd, filename, expected_fingerprint):
+    try:
+        current_stat = os.stat(filename, dir_fd=root_fd, follow_symlinks=False)
+    except OSError as exc:
+        raise ValueError("Refusing to return a replaced published download.") from exc
+    if (
+        not stat.S_ISREG(current_stat.st_mode)
+        or file_fingerprint(current_stat) != expected_fingerprint
+    ):
+        raise ValueError("Refusing to return a replaced published download.")
+    return current_stat
+
+
+def open_cached_download(root_fd, filename):
+    try:
+        cached_fd = os.open(
+            filename,
+            os.O_RDONLY | os.O_NOFOLLOW,
+            dir_fd=root_fd,
+        )
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError("Existing download path must be a regular non-symlink file.") from exc
+        raise
+
+    if not stat.S_ISREG(os.fstat(cached_fd).st_mode):
+        os.close(cached_fd)
+        raise ValueError("Existing download path must be a regular non-symlink file.")
+    return cached_fd
+
+
+def open_extraction_directory(parent_fd, component):
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        return os.open(component, flags, dir_fd=parent_fd)
+    except FileNotFoundError:
+        try:
+            os.mkdir(component, mode=0o700, dir_fd=parent_fd)
+        except FileExistsError:
+            pass
+        try:
+            return os.open(component, flags, dir_fd=parent_fd)
+        except OSError as exc:
+            if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                raise ValueError("Refusing to extract through a raced destination path.") from exc
+            raise
+    except OSError as exc:
+        if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise ValueError("Refusing to extract through a raced destination path.") from exc
+        raise
+
+
+def member_path_parts(member, output_root):
+    target_path = os.path.abspath(os.path.join(output_root, member.filename))
+    relative_path = os.path.relpath(target_path, output_root)
+    return [part for part in relative_path.split(os.sep) if part not in ("", ".")]
+
+
+def open_member_parent(root_fd, parent_parts):
+    current_fd = os.dup(root_fd)
+    try:
+        for part in parent_parts:
+            child_fd = open_extraction_directory(current_fd, part)
+            os.close(current_fd)
+            current_fd = child_fd
+        return current_fd
+    except Exception:
+        os.close(current_fd)
+        raise
+
+
+def open_output_root(output_root):
+    if not os.path.isabs(output_root):
+        raise ValueError("Extraction output root must be absolute.")
+
+    filesystem_root_fd = os.open(
+        os.path.sep,
+        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+    )
+    try:
+        root_parts = [part for part in output_root.split(os.path.sep) if part]
+        return open_member_parent(filesystem_root_fd, root_parts)
+    finally:
+        os.close(filesystem_root_fd)
+
+
+def extract_zip_member(zip_ref, member, output_root, root_fd):
+    parts = member_path_parts(member, output_root)
+    if not parts:
+        return
+
+    if member.is_dir():
+        directory_fd = open_member_parent(root_fd, parts)
+        os.close(directory_fd)
+        return
+
+    parent_fd = open_member_parent(root_fd, parts[:-1])
+    temporary_name = ".{0}.{1}.part".format(parts[-1], secrets.token_hex(8))
+    temporary_fd = None
+    try:
+        temporary_fd = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=parent_fd,
+        )
+        with zip_ref.open(member, "r") as source, os.fdopen(temporary_fd, "wb") as target:
+            temporary_fd = None
+            while True:
+                chunk = source.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                target.write(chunk)
+            target.flush()
+            os.fsync(target.fileno())
+
+        os.replace(
+            temporary_name,
+            parts[-1],
+            src_dir_fd=parent_fd,
+            dst_dir_fd=parent_fd,
+        )
+        temporary_name = None
+    finally:
+        if temporary_fd is not None:
+            os.close(temporary_fd)
+        if temporary_name is not None:
+            try:
+                os.unlink(temporary_name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+        os.close(parent_fd)
 
 
 def unzip(
@@ -293,6 +605,8 @@ def unzip(
 ):
     output_dir = output_dir or os.getcwd()
     logging.info("Extracting file: %s", filename)
+    require_secure_extraction_support()
+    output_root = os.path.abspath(output_dir)
 
     with zipfile.ZipFile(filename, "r") as zip_ref:
         members = list(
@@ -303,8 +617,12 @@ def unzip(
                 max_archive_members=max_archive_members,
             )
         )
-        for member in members:
-            zip_ref.extract(member, output_dir)
+        root_fd = open_output_root(output_root)
+        try:
+            for member in members:
+                extract_zip_member(zip_ref, member, output_root, root_fd)
+        finally:
+            os.close(root_fd)
 
 
 if __name__ == "__main__":

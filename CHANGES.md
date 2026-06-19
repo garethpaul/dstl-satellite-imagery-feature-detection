@@ -1,5 +1,52 @@
 # Changes
 
+## 2026-06-19
+
+- Preserved primary download errors when response cleanup also fails and made
+  rollback unlink only the invocation-owned inode, with final inode verification
+  after successful response cleanup.
+- Preserved unknown legacy or collided partial files instead of deleting paths
+  not created by the current invocation.
+- Rejected short response bodies that disagree with `Content-Length`.
+- Rejected ZIP special-file members and portable case or Unicode-normalization
+  target collisions before extraction.
+
+## 2026-06-18
+
+- Refreshed the pinned Ruff verification tool to 0.15.16 while preserving the
+  runtime dependency, audit tool, 46-test suite, and offline dataset boundary.
+
+## 2026-06-15
+
+- Rolled back published downloads when response finalization failed and moved
+  the final output-root identity check after response close.
+- Isolated concurrent downloads with secret-suffixed partial names on the
+  current rollback and post-publication verification stack.
+- Revalidated download-root identity after final publication and rolled back
+  invocation-owned files when the output pathname changed.
+- Rolled back owned final download names when post-publication cleanup fails.
+- Prevented download finalization from clobbering raced destination files.
+- Bound download cache and publication operations to a descriptor-verified output root.
+- Rejected symlinked extraction roots before descriptor traversal and member writes.
+
+## 2026-06-14
+
+- Added an exact-head DSTL dataset integration verification matrix that
+  separates offline checks from sanitized credentialed download, extraction,
+  private dataset, resource, and loader evidence.
+- Reject existing destination type collisions during archive preflight so a
+  later file/directory mismatch cannot leave earlier members written.
+
+## 2026-06-13
+
+- Reject archive file and directory prefix collisions in either member order
+  before any destination file is written.
+- Closed archive destination path races with descriptor-rooted no-follow
+  traversal, synced temporary files, atomic replacement, and failure cleanup.
+- Reject ZIP members whose normalized destination paths collide, before any
+  archive member is written.
+- Added offline regression and static contracts for alias-path collisions.
+
 ## 2026-06-12
 
 - Reject invalid or empty cached ZIP files before loading credentials or
@@ -7,6 +54,12 @@
 - Validate completed partial downloads before atomic promotion, removing HTML,
   corrupt, or empty payloads while preserving response closure.
 - Add offline regressions for invalid cached and streamed archive payloads.
+- Disable checkout credential persistence, pin the Ubuntu runner, and make the
+  complete verification gate independent of the caller's working directory.
+- Propagate the selected Python interpreter into the baseline script and run
+  unittest discovery from the repository root.
+- Reject extra or release-tagged workflow actions outside the two reviewed
+  immutable action pins.
 
 ## 2026-06-10
 

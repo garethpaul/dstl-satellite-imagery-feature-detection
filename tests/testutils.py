@@ -1,6 +1,8 @@
 import io
 import os
+import stat
 import tempfile
+import threading
 import unittest
 import zipfile
 
@@ -245,7 +247,7 @@ class DatasetLoadTest(unittest.TestCase):
         self.assertTrue(response.status_checked)
         self.assertTrue(response.closed)
 
-    def test_download_removes_stale_partial_file_before_retry(self):
+    def test_download_preserves_unowned_legacy_partial_file(self):
         payload = zip_payload(b"fresh")
         response = FakeResponse([payload])
         session = FakeSession(response)
@@ -264,7 +266,24 @@ class DatasetLoadTest(unittest.TestCase):
 
             with open(filepath, "rb") as handle:
                 self.assertEqual(payload, handle.read())
-            self.assertFalse(os.path.exists(filepath + ".part"))
+            with open(filepath + ".part", "rb") as handle:
+                self.assertEqual(b"stale", handle.read())
+
+    def test_download_rejects_short_body_for_declared_content_length(self):
+        payload = zip_payload(b"short")
+        response = FakeResponse([payload], headers={"Content-Length": str(len(payload) + 1)})
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(ValueError, "Content-Length"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=FakeSession(response),
+                    credentials={"UserName": "user", "Password": "pass"},
+                )
+
+            self.assertEqual([], os.listdir(tmpdir))
+            self.assertTrue(response.closed)
 
     def test_download_rejects_invalid_cached_zip_before_credentials(self):
         response = FakeResponse()
@@ -312,6 +331,44 @@ class DatasetLoadTest(unittest.TestCase):
                 self.assertEqual(payload, handle.read())
 
         self.assertEqual([], session.calls)
+
+    def test_download_rejects_replaced_output_root_during_cache_validation(self):
+        payload = zip_payload(b"cached")
+        response = FakeResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            moved_dir = os.path.join(tmpdir, "moved-output")
+            outside_dir = os.path.join(tmpdir, "outside")
+            os.makedirs(output_dir)
+            os.makedirs(outside_dir)
+            filepath = os.path.join(output_dir, "sample_submission.csv.zip")
+            with open(filepath, "wb") as handle:
+                handle.write(payload)
+
+            original_validate = utils.require_valid_zip_file
+
+            def replace_root_while_validating(source):
+                os.rename(output_dir, moved_dir)
+                os.symlink(outside_dir, output_dir)
+                return original_validate(source)
+
+            utils.require_valid_zip_file = replace_root_while_validating
+            try:
+                with self.assertRaisesRegex(ValueError, "raced output root"):
+                    utils.download_url(
+                        kaggle_url(),
+                        output_dir=output_dir,
+                        session=session,
+                        credentials_file=os.path.join(tmpdir, "missing.ini"),
+                    )
+            finally:
+                utils.require_valid_zip_file = original_validate
+
+            self.assertEqual([], session.calls)
+            self.assertTrue(os.path.exists(os.path.join(moved_dir, "sample_submission.csv.zip")))
+            self.assertFalse(os.path.exists(os.path.join(outside_dir, "sample_submission.csv.zip")))
 
     def test_download_rejects_invalid_streamed_zip_and_removes_partial_file(self):
         response = FakeResponse([b"<html>login required</html>"])
@@ -394,19 +451,99 @@ class DatasetLoadTest(unittest.TestCase):
             self.assertEqual([], session.calls)
             self.assertTrue(os.path.islink(filepath))
 
-    def test_download_exclusively_creates_partial_file(self):
+    def test_download_rejects_symlinked_output_root_before_request(self):
+        response = FakeResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outside_dir = os.path.join(tmpdir, "outside")
+            output_dir = os.path.join(tmpdir, "output")
+            os.makedirs(outside_dir)
+            os.symlink(outside_dir, output_dir)
+
+            with self.assertRaisesRegex(ValueError, "raced output root"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=output_dir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            self.assertEqual([], session.calls)
+            self.assertFalse(os.path.exists(os.path.join(outside_dir, "sample_submission.csv.zip")))
+
+    def test_download_rejects_replaced_output_root_before_writing(self):
+        response = FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            moved_dir = os.path.join(tmpdir, "moved-output")
+            outside_dir = os.path.join(tmpdir, "outside")
+            os.makedirs(output_dir)
+            os.makedirs(outside_dir)
+
+            def replace_output_root():
+                os.rename(output_dir, moved_dir)
+                os.symlink(outside_dir, output_dir)
+
+            session = FakeSession(response, on_post=replace_output_root)
+            with self.assertRaisesRegex(ValueError, "raced output root"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=output_dir,
+                    session=session,
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            self.assertFalse(os.path.exists(os.path.join(outside_dir, "sample_submission.csv.zip")))
+            self.assertFalse(
+                os.path.exists(os.path.join(outside_dir, "sample_submission.csv.zip.part"))
+            )
+            self.assertFalse(os.path.exists(os.path.join(moved_dir, "sample_submission.csv.zip")))
+            self.assertTrue(response.closed)
+
+    def test_download_does_not_remove_unowned_partial_collision(self):
         response = FakeResponse()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             outside_path = os.path.join(tmpdir, "outside.zip")
             with open(outside_path, "wb") as handle:
                 handle.write(b"outside")
-            partial_path = os.path.join(tmpdir, "sample_submission.csv.zip.part")
+            partial_path = os.path.join(tmpdir, ".sample_submission.csv.zip.fixed.part")
             session = FakeSession(
                 response,
                 on_post=lambda: os.symlink(outside_path, partial_path),
             )
 
+            original_token_hex = utils.secrets.token_hex
+            utils.secrets.token_hex = lambda _: "fixed"
+            try:
+                with self.assertRaises(FileExistsError):
+                    utils.download_url(
+                        kaggle_url(),
+                        output_dir=tmpdir,
+                        session=session,
+                        credentials={"UserName": "user", "Password": "secret"},
+                    )
+            finally:
+                utils.secrets.token_hex = original_token_hex
+
+            with open(outside_path, "rb") as handle:
+                self.assertEqual(b"outside", handle.read())
+            self.assertTrue(os.path.islink(partial_path))
+            self.assertTrue(response.closed)
+
+    def test_download_does_not_clobber_raced_final_file(self):
+        response = FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+
+            def create_final_file():
+                with open(filepath, "wb") as handle:
+                    handle.write(b"competing download")
+
+            session = FakeSession(response, on_post=create_final_file)
             with self.assertRaises(FileExistsError):
                 utils.download_url(
                     kaggle_url(),
@@ -415,9 +552,280 @@ class DatasetLoadTest(unittest.TestCase):
                     credentials={"UserName": "user", "Password": "secret"},
                 )
 
-            with open(outside_path, "rb") as handle:
-                self.assertEqual(b"outside", handle.read())
+            with open(filepath, "rb") as handle:
+                self.assertEqual(b"competing download", handle.read())
+            self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
+            self.assertTrue(response.closed)
+
+    def test_download_rolls_back_final_file_when_partial_cleanup_fails(self):
+        response = FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+            partial_path = os.path.join(tmpdir, ".sample_submission.csv.zip.fixed.part")
+            original_unlink = os.unlink
+            original_token_hex = utils.secrets.token_hex
+            partial_unlinks = 0
+
+            def fail_first_partial_cleanup(path, *args, **kwargs):
+                nonlocal partial_unlinks
+                if path == os.path.basename(partial_path):
+                    partial_unlinks += 1
+                    if partial_unlinks == 1:
+                        raise PermissionError("injected post-link cleanup failure")
+                return original_unlink(path, *args, **kwargs)
+
+            session = FakeSession(
+                response,
+                on_post=lambda: setattr(utils.os, "unlink", fail_first_partial_cleanup),
+            )
+            utils.secrets.token_hex = lambda _: "fixed"
+            try:
+                with self.assertRaisesRegex(PermissionError, "injected post-link cleanup failure"):
+                    utils.download_url(
+                        kaggle_url(),
+                        output_dir=tmpdir,
+                        session=session,
+                        credentials={"UserName": "user", "Password": "secret"},
+                    )
+            finally:
+                utils.os.unlink = original_unlink
+                utils.secrets.token_hex = original_token_hex
+
+            self.assertFalse(os.path.lexists(filepath))
             self.assertFalse(os.path.lexists(partial_path))
+            self.assertTrue(response.closed)
+
+    def test_download_rolls_back_final_file_when_response_close_fails(self):
+        class FailingCloseResponse(FakeResponse):
+            def close(self):
+                self.closed = True
+                raise RuntimeError("injected response close failure")
+
+        response = FailingCloseResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+
+            with self.assertRaisesRegex(RuntimeError, "injected response close failure"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=FakeSession(response),
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            self.assertFalse(os.path.lexists(filepath))
+            self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
+            self.assertTrue(response.closed)
+
+    def test_download_preserves_primary_failure_when_response_close_also_fails(self):
+        class FailingStreamAndCloseResponse(FailingResponse):
+            def close(self):
+                self.closed = True
+                raise OSError("injected response close failure")
+
+        response = FailingStreamAndCloseResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(RuntimeError, "download interrupted"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=FakeSession(response),
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            self.assertEqual([], os.listdir(tmpdir))
+            self.assertTrue(response.closed)
+
+    def test_download_rollback_preserves_raced_replacement_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+
+            class ReplacingFailingCloseResponse(FakeResponse):
+                def close(self):
+                    os.unlink(filepath)
+                    with open(filepath, "wb") as handle:
+                        handle.write(b"replacement")
+                    self.closed = True
+                    raise RuntimeError("injected response close failure")
+
+            response = ReplacingFailingCloseResponse()
+
+            with self.assertRaisesRegex(RuntimeError, "injected response close failure"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=FakeSession(response),
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            with open(filepath, "rb") as handle:
+                self.assertEqual(b"replacement", handle.read())
+            self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
+            self.assertTrue(response.closed)
+
+    def test_download_rejects_raced_replacement_after_successful_response_close(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+
+            class ReplacingCloseResponse(FakeResponse):
+                def close(self):
+                    os.unlink(filepath)
+                    with open(filepath, "wb") as handle:
+                        handle.write(b"replacement")
+                    super().close()
+
+            response = ReplacingCloseResponse()
+
+            with self.assertRaisesRegex(ValueError, "published download"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=FakeSession(response),
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            with open(filepath, "rb") as handle:
+                self.assertEqual(b"replacement", handle.read())
+            self.assertTrue(response.closed)
+
+    def test_download_rolls_back_when_output_root_changes_during_response_close(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            moved_dir = os.path.join(tmpdir, "moved-output")
+            outside_dir = os.path.join(tmpdir, "outside")
+            os.makedirs(output_dir)
+            os.makedirs(outside_dir)
+            filename = "sample_submission.csv.zip"
+
+            class ReplacingCloseResponse(FakeResponse):
+                def close(self):
+                    os.rename(output_dir, moved_dir)
+                    os.symlink(outside_dir, output_dir)
+                    super().close()
+
+            response = ReplacingCloseResponse()
+
+            with self.assertRaisesRegex(ValueError, "raced output root"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=output_dir,
+                    session=FakeSession(response),
+                    credentials={"UserName": "user", "Password": "secret"},
+                )
+
+            self.assertFalse(os.path.lexists(os.path.join(moved_dir, filename)))
+            self.assertEqual([], [name for name in os.listdir(moved_dir) if name.endswith(".part")])
+            self.assertFalse(os.path.lexists(os.path.join(outside_dir, filename)))
+            self.assertTrue(response.closed)
+
+    def test_concurrent_downloads_do_not_share_partial_files(self):
+        first_payload = zip_payload(b"first download")
+        second_payload = zip_payload(b"second download")
+        first_written = threading.Event()
+        second_written = threading.Event()
+        finish_first = threading.Event()
+        finish_second = threading.Event()
+
+        class PausingResponse(FakeResponse):
+            def __init__(self, payload, written, finish):
+                super().__init__([payload])
+                self.written = written
+                self.finish = finish
+
+            def iter_content(self, chunk_size):
+                self.chunk_size = chunk_size
+                yield from self.chunks
+                self.written.set()
+                if not self.finish.wait(timeout=5):
+                    raise RuntimeError("test download did not resume")
+
+        first_response = PausingResponse(first_payload, first_written, finish_first)
+        second_response = PausingResponse(second_payload, second_written, finish_second)
+        results = {}
+        errors = {}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+
+            def run_download(name, response):
+                try:
+                    results[name] = utils.download_url(
+                        kaggle_url(),
+                        output_dir=tmpdir,
+                        session=FakeSession(response),
+                        credentials={"UserName": "user", "Password": "secret"},
+                    )
+                except Exception as exc:
+                    errors[name] = exc
+
+            first_thread = threading.Thread(
+                target=run_download,
+                args=("first", first_response),
+            )
+            second_thread = threading.Thread(
+                target=run_download,
+                args=("second", second_response),
+            )
+            first_thread.start()
+            self.assertTrue(first_written.wait(timeout=5))
+            second_thread.start()
+            self.assertTrue(second_written.wait(timeout=5))
+
+            finish_first.set()
+            first_thread.join(timeout=5)
+            self.assertFalse(first_thread.is_alive())
+            finish_second.set()
+            second_thread.join(timeout=5)
+            self.assertFalse(second_thread.is_alive())
+
+            self.assertEqual(filepath, results.get("first"))
+            self.assertIsInstance(errors.get("second"), FileExistsError)
+            with open(filepath, "rb") as handle:
+                self.assertEqual(first_payload, handle.read())
+            self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
+            self.assertTrue(first_response.closed)
+            self.assertTrue(second_response.closed)
+
+    def test_download_rolls_back_when_output_root_changes_after_publication(self):
+        response = FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            moved_dir = os.path.join(tmpdir, "moved-output")
+            outside_dir = os.path.join(tmpdir, "outside")
+            os.makedirs(output_dir)
+            os.makedirs(outside_dir)
+            filename = "sample_submission.csv.zip"
+            original_require_identity = utils.require_download_root_identity
+            identity_checks = 0
+
+            def replace_root_after_publication(path, root_fd):
+                nonlocal identity_checks
+                identity_checks += 1
+                if identity_checks == 3:
+                    os.rename(output_dir, moved_dir)
+                    os.symlink(outside_dir, output_dir)
+                return original_require_identity(path, root_fd)
+
+            utils.require_download_root_identity = replace_root_after_publication
+            try:
+                with self.assertRaisesRegex(ValueError, "raced output root"):
+                    utils.download_url(
+                        kaggle_url(),
+                        output_dir=output_dir,
+                        session=FakeSession(response),
+                        credentials={"UserName": "user", "Password": "secret"},
+                    )
+            finally:
+                utils.require_download_root_identity = original_require_identity
+
+            self.assertEqual(3, identity_checks)
+            self.assertFalse(os.path.lexists(os.path.join(moved_dir, filename)))
+            self.assertEqual([], [name for name in os.listdir(moved_dir) if name.endswith(".part")])
+            self.assertFalse(os.path.lexists(os.path.join(outside_dir, filename)))
             self.assertTrue(response.closed)
 
     def test_unzip_rejects_path_traversal(self):
@@ -444,6 +852,21 @@ class DatasetLoadTest(unittest.TestCase):
                 utils.unzip(archive, output_dir=tmpdir)
 
             self.assertFalse(os.path.lexists(os.path.join(tmpdir, "link")))
+
+    def test_unzip_rejects_special_file_members(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            archive = os.path.join(tmpdir, "fifo.zip")
+            member = zipfile.ZipInfo("named-pipe")
+            member.create_system = 3
+            member.external_attr = (stat.S_IFIFO | 0o600) << 16
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr(member, b"")
+
+            with self.assertRaisesRegex(ValueError, "special file"):
+                utils.unzip(archive, output_dir=output_dir)
+
+            self.assertFalse(os.path.exists(output_dir))
 
     def test_unzip_rejects_existing_symlink_in_destination_path(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -473,8 +896,90 @@ class DatasetLoadTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 utils.unzip(archive, output_dir=output_dir)
 
-            self.assertFalse(os.path.exists(os.path.join(output_dir, "safe.txt")))
+            self.assertFalse(os.path.exists(output_dir))
             self.assertFalse(os.path.exists(os.path.join(tmpdir, "outside.txt")))
+
+    def test_unzip_rejects_colliding_target_paths_before_writing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            archive = os.path.join(tmpdir, "colliding-targets.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("safe.txt", "first")
+                zip_ref.writestr("./safe.txt", "second")
+
+            with self.assertRaisesRegex(ValueError, "colliding target paths"):
+                utils.unzip(archive, output_dir=output_dir)
+
+            self.assertFalse(os.path.exists(os.path.join(output_dir, "safe.txt")))
+
+    def test_unzip_rejects_portable_case_and_unicode_target_collisions(self):
+        member_pairs = (
+            ("Image.tif", "image.tif"),
+            ("caf\N{LATIN SMALL LETTER E WITH ACUTE}.txt", "cafe\N{COMBINING ACUTE ACCENT}.txt"),
+        )
+
+        for members in member_pairs:
+            with self.subTest(members=members), tempfile.TemporaryDirectory() as tmpdir:
+                output_dir = os.path.join(tmpdir, "output")
+                archive = os.path.join(tmpdir, "portable-collision.zip")
+                with zipfile.ZipFile(archive, "w") as zip_ref:
+                    zip_ref.writestr(members[0], "first")
+                    zip_ref.writestr(members[1], "second")
+
+                with self.assertRaisesRegex(ValueError, "colliding target paths"):
+                    utils.unzip(archive, output_dir=output_dir)
+
+                self.assertFalse(os.path.exists(output_dir))
+
+    def test_unzip_rejects_file_directory_prefix_collisions_before_writing(self):
+        member_orders = (
+            (("nested", "file"), ("nested/file.txt", "child")),
+            (("nested/file.txt", "child"), ("nested", "file")),
+        )
+
+        for members in member_orders:
+            with self.subTest(members=members), tempfile.TemporaryDirectory() as tmpdir:
+                output_dir = os.path.join(tmpdir, "output")
+                archive = os.path.join(tmpdir, "prefix-collision.zip")
+                with zipfile.ZipFile(archive, "w") as zip_ref:
+                    for member_name, content in members:
+                        zip_ref.writestr(member_name, content)
+
+                with self.assertRaisesRegex(ValueError, "file and directory prefix collisions"):
+                    utils.unzip(archive, output_dir=output_dir)
+
+                self.assertFalse(os.path.exists(output_dir))
+
+    def test_unzip_rejects_existing_destination_type_collisions_before_writing(self):
+        collisions = ("directory-at-file-target", "file-at-required-directory")
+
+        for collision in collisions:
+            with self.subTest(collision=collision), tempfile.TemporaryDirectory() as tmpdir:
+                output_dir = os.path.join(tmpdir, "output")
+                os.makedirs(output_dir)
+                nested_path = os.path.join(output_dir, "nested")
+                if collision == "directory-at-file-target":
+                    os.makedirs(nested_path)
+                    conflicting_member = "nested"
+                else:
+                    with open(nested_path, "w") as handle:
+                        handle.write("existing")
+                    conflicting_member = "nested/file.txt"
+
+                archive = os.path.join(tmpdir, "existing-type-collision.zip")
+                with zipfile.ZipFile(archive, "w") as zip_ref:
+                    zip_ref.writestr("safe.txt", "safe")
+                    zip_ref.writestr(conflicting_member, "replacement")
+
+                with self.assertRaisesRegex(ValueError, "destination type collision"):
+                    utils.unzip(archive, output_dir=output_dir)
+
+                self.assertFalse(os.path.exists(os.path.join(output_dir, "safe.txt")))
+                if collision == "directory-at-file-target":
+                    self.assertTrue(os.path.isdir(nested_path))
+                else:
+                    with open(nested_path) as handle:
+                        self.assertEqual("existing", handle.read())
 
     def test_unzip_extracts_safe_members(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -486,6 +991,113 @@ class DatasetLoadTest(unittest.TestCase):
 
             with open(os.path.join(tmpdir, "nested", "file.txt")) as handle:
                 self.assertEqual("ok", handle.read())
+
+    def test_unzip_securely_creates_missing_output_root(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output", "nested-root")
+            archive = os.path.join(tmpdir, "safe.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("file.txt", "ok")
+
+            utils.unzip(archive, output_dir=output_dir)
+
+            with open(os.path.join(output_dir, "file.txt")) as handle:
+                self.assertEqual("ok", handle.read())
+
+    def test_unzip_rejects_destination_symlink_race(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "output")
+            outside_dir = os.path.join(tmpdir, "outside")
+            nested_dir = os.path.join(output_dir, "nested")
+            os.makedirs(nested_dir)
+            os.makedirs(outside_dir)
+            archive = os.path.join(tmpdir, "raced.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("nested/file.txt", "blocked")
+
+            original_extract = utils.extract_zip_member
+
+            def race_destination(zip_ref, member, output_root, root_fd):
+                os.rmdir(nested_dir)
+                os.symlink(outside_dir, nested_dir)
+                return original_extract(zip_ref, member, output_root, root_fd)
+
+            utils.extract_zip_member = race_destination
+            try:
+                with self.assertRaisesRegex(ValueError, "raced destination path"):
+                    utils.unzip(archive, output_dir=output_dir)
+            finally:
+                utils.extract_zip_member = original_extract
+
+            self.assertFalse(os.path.exists(os.path.join(outside_dir, "file.txt")))
+
+    def test_unzip_rejects_symlinked_output_root(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outside_dir = os.path.join(tmpdir, "outside")
+            output_dir = os.path.join(tmpdir, "output")
+            os.makedirs(outside_dir)
+            os.symlink(outside_dir, output_dir)
+            archive = os.path.join(tmpdir, "root-symlink.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("file.txt", "blocked")
+
+            with self.assertRaisesRegex(ValueError, "raced destination path"):
+                utils.unzip(archive, output_dir=output_dir)
+
+            self.assertTrue(os.path.islink(output_dir))
+            self.assertFalse(os.path.exists(os.path.join(outside_dir, "file.txt")))
+
+    def test_unzip_atomically_replaces_existing_regular_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = os.path.join(tmpdir, "file.txt")
+            with open(output, "w", encoding="utf-8") as handle:
+                handle.write("old")
+            archive = os.path.join(tmpdir, "replacement.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("file.txt", "new")
+
+            utils.unzip(archive, output_dir=tmpdir)
+
+            with open(output, encoding="utf-8") as handle:
+                self.assertEqual("new", handle.read())
+            self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
+
+    def test_unzip_preserves_existing_file_when_replace_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = os.path.join(tmpdir, "file.txt")
+            with open(output, "w", encoding="utf-8") as handle:
+                handle.write("old")
+            archive = os.path.join(tmpdir, "replace-failure.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("file.txt", "new")
+
+            original_replace = utils.os.replace
+            utils.os.replace = lambda *args, **kwargs: (_ for _ in ()).throw(OSError("failed"))
+            try:
+                with self.assertRaisesRegex(OSError, "failed"):
+                    utils.unzip(archive, output_dir=tmpdir)
+            finally:
+                utils.os.replace = original_replace
+
+            with open(output, encoding="utf-8") as handle:
+                self.assertEqual("old", handle.read())
+            self.assertEqual([], [name for name in os.listdir(tmpdir) if name.endswith(".part")])
+
+    def test_unzip_fails_closed_without_no_follow_support(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive = os.path.join(tmpdir, "safe.zip")
+            with zipfile.ZipFile(archive, "w") as zip_ref:
+                zip_ref.writestr("file.txt", "data")
+
+            original_no_follow = utils.os.O_NOFOLLOW
+            del utils.os.O_NOFOLLOW
+            try:
+                with self.assertRaisesRegex(RuntimeError, "descriptor-relative"):
+                    utils.unzip(archive, output_dir=tmpdir)
+            finally:
+                utils.os.O_NOFOLLOW = original_no_follow
+
+            self.assertFalse(os.path.exists(os.path.join(tmpdir, "file.txt")))
 
     def test_unzip_rejects_extracted_size_over_limit(self):
         with tempfile.TemporaryDirectory() as tmpdir:

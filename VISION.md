@@ -34,18 +34,37 @@ Current baseline:
 - Default tests use fake HTTP responses and temporary zip files instead of live
   Kaggle credentials or downloads.
 - Zip extraction preflights all member paths and rejects archive or destination
-  symlink traversal before writing files.
+  symlink traversal, special-file members, portable case or Unicode-normalization
+  target collisions, and file-directory prefix collisions plus existing
+  destination type collisions before writing files. Preserve rejection of
+  existing destination type collisions during archive preflight.
+- Close destination path races with descriptor-rooted extraction, no-follow
+  parent traversal, and same-directory atomic file publication.
+- Bind download publication to a descriptor-verified output root.
+- Publish validated downloads without clobbering raced destinations.
+- Per-attempt secret-suffixed partial names isolate concurrent downloads while
+  no-clobber publication permits only one final winner.
+- Preserve unknown legacy or collided partial names and require exact agreement
+  between declared response length and streamed bytes.
+- Roll back owned final download names when post-publication cleanup fails.
+- Revalidate the download root after final publication before returning paths.
+- Keep response close and final root verification inside download rollback.
+- Preserve primary download failures and identity-check rollback targets before
+  unlinking invocation-owned paths, then revalidate the published inode after
+  response cleanup.
+- Reject symlinked extraction roots before descriptor traversal.
 - Download cache reuse rejects symlinks and non-regular paths, while partial
   files use exclusive creation to prevent path-following races.
 - Cached and newly streamed payloads must be non-empty ZIP archives before they
   are reused or promoted to the final dataset path.
+- Keep exact-head credentialed download, private dataset, and loader evidence
+  sanitized and separate from offline verification.
 
 Next priorities:
 
 - Replace password-based login flow with a maintained Kaggle API path
 - Constrain or remove redirect-based credential forwarding in the legacy login
   flow
-- Close destination path races between archive preflight and extraction
 - Add optional integration tests for real Kaggle downloads behind an explicit
   opt-in flag
 - Define modeling or feature-detection scope before adding notebooks or scripts
