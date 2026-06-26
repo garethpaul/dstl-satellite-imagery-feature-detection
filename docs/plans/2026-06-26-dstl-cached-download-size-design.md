@@ -1,5 +1,7 @@
 # Cached download size boundary design
 
+status: approved
+
 ## Problem
 
 `download_url` enforces `max_download_bytes` for declared and streamed response

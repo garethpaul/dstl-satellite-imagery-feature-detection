@@ -109,6 +109,27 @@ if ! grep -Fq 'Cached valid ZIP files larger than the configured download limit'
   exit 1
 fi
 
+for cached_size_plan_contract in \
+  'status: approved' \
+  'descriptor-based check'; do
+  if ! grep -Fq "$cached_size_plan_contract" "$CACHED_SIZE_DESIGN"; then
+    printf '%s\n' "Cached download size design contract is missing: $cached_size_plan_contract" >&2
+    exit 1
+  fi
+done
+
+for cached_size_plan_contract in \
+  'status: completed' \
+  '## Verification completed' \
+  'Two isolated hostile mutations were rejected' \
+  '55 offline tests' \
+  'no known dependency vulnerabilities'; do
+  if ! grep -Fq "$cached_size_plan_contract" "$CACHED_SIZE_PLAN"; then
+    printf '%s\n' "Cached download size plan evidence is missing: $cached_size_plan_contract" >&2
+    exit 1
+  fi
+done
+
 for dataset_contract in \
   "Commit: pending implementation commit" \
   "Pull request: pending" \

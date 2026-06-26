@@ -36,8 +36,18 @@ when downloaded.
 
 ### Validation
 
-- Focused cached-size regressions — pending.
-- Full pinned verification and hosted CI — pending.
+- Focused oversized and exact-limit cached-size regressions — passed.
+- Two isolated hostile mutations — rejected guard removal and an off-by-one
+  `>=` boundary.
+- `make check`, `make lint`, `make test`, `make build`, and `make verify` —
+  passed in the pinned isolated Python 3.11 environment.
+- Ruff format/check, 55 offline tests, bytecode compilation, and pip-audit —
+  passed; no known dependency vulnerabilities were reported.
+- Hosted Check run `28242505722` — passed on Python 3.10, 3.12, and 3.14.
+- CodeQL run `28242503647` — passed Actions and Python analysis.
+- `git diff --check` — passed.
+- Codex review helper — blocked by repeated HTTP 401 authentication failures;
+  exact-head manual review found no actionable findings.
 
 ### Bugs / findings
 
@@ -46,12 +56,12 @@ when downloaded.
 
 ### Blockers
 
-- None for the patch; live Kaggle integration remains intentionally out of the
-  offline default gate.
+- None for the patch. Live Kaggle integration remains intentionally out of the
+  offline default gate, and local Codex API authentication remains unavailable.
 
 ### Next action
 
-- Run focused mutations and the full pinned verification matrix.
+- Merge PR #21 after the final documentation-only head passes hosted checks.
 
 ## 2026-06-25 19:10 PDT - P1 - Reject explicit Kaggle download ports
 
