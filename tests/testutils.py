@@ -162,6 +162,23 @@ class DatasetLoadTest(unittest.TestCase):
 
         self.assertEqual([], session.calls)
 
+    def test_download_rejects_explicit_port_before_credentials(self):
+        for port in (443, 444):
+            with self.subTest(port=port):
+                response = FakeResponse()
+                session = FakeSession(response)
+
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    with self.assertRaisesRegex(ValueError, "explicit port"):
+                        utils.download_url(
+                            kaggle_url().replace("www.kaggle.com", f"www.kaggle.com:{port}", 1),
+                            output_dir=tmpdir,
+                            session=session,
+                            credentials_file=os.path.join(tmpdir, "missing.ini"),
+                        )
+
+                self.assertEqual([], session.calls)
+
     def test_download_rejects_embedded_url_credentials_before_credentials(self):
         response = FakeResponse()
         session = FakeSession(response)

@@ -1,5 +1,71 @@
 # Changes
 
+## 2026-06-25 19:10 PDT - P1 - Reject explicit Kaggle download ports
+
+### Summary
+
+Closed a credential authority gap where exact Kaggle hostnames with arbitrary
+explicit ports reached credential loading and request dispatch. The downloader
+now accepts only the default HTTPS authority used by the checked-in endpoint.
+
+### Work completed
+
+- Added an offline regression that covers explicit ports `443` and `444` and
+  asserts no session call occurs.
+- Observed the pre-fix test reach missing credential-file loading instead of
+  rejecting the URL authority.
+- Rejected every parsed explicit port before credentials are loaded or posted.
+- Added accepted design and implementation plans plus mutation-sensitive static
+  and documentation contracts.
+
+### Threads
+
+- Started: None — completed directly because the boundary and fix are narrow.
+- Continued: None.
+- Stopped: None.
+
+### Files changed
+
+- `utils.py` — rejects explicit download URL ports.
+- `tests/testutils.py` — covers default-looking and arbitrary explicit ports.
+- `scripts/check-baseline.sh` — preserves source, test, plan, and documentation
+  contracts.
+- `README.md`, `SECURITY.md`, `VISION.md`, and `AGENTS.md` — document the
+  default HTTPS Kaggle authority boundary.
+- `docs/plans/2026-06-25-dstl-kaggle-explicit-port-design.md` and
+  `docs/plans/2026-06-25-dstl-kaggle-explicit-port.md` — record the decision and
+  implementation steps.
+
+### Validation
+
+- Focused explicit-port regression — passed after the intended pre-fix failure.
+- `make check`, `make lint`, `make test`, `make build`, and `make verify` with
+  the pinned isolated environment — passed on Python 3.11.
+- Ruff format/check, 53 offline tests, bytecode compilation, and pip-audit —
+  passed; no known dependency vulnerabilities were reported.
+- Three isolated hostile guard mutations — rejected removal, allowing `:443`,
+  and rejecting only `:444`.
+- `git diff --check` — passed.
+- Hosted Check run `28212622887` — passed on Python 3.10, 3.12, and 3.14.
+- CodeQL run `28212621806` — passed for actions and Python analysis.
+- Codex review helper with `codex review --base origin/master` — blocked by
+  local OpenAI API authentication (HTTP 401); exact-head manual review found no
+  actionable findings.
+
+### Bugs / findings
+
+- P1: a URL such as `https://www.kaggle.com:444/...` passed hostname and HTTPS
+  checks, allowing local Kaggle credentials to be posted to an arbitrary port.
+
+### Blockers
+
+- None for the patch. Local Codex API authentication remains unavailable, with
+  exact-head manual review used instead.
+
+### Next action
+
+- Merge PR #20 after the final documentation-only head passes hosted checks.
+
 ## 2026-06-19
 
 - Preserved primary download errors when response cleanup also fails and made

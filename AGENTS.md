@@ -48,7 +48,7 @@
 - Downloaded `.zip` archives and extracted imagery should stay outside commits.
 - Preserve the configurable download, expanded-size, and archive-member limits
   when changing the downloader or extraction flow.
-- HTTPS download URLs are enforced before credentials are posted, and live download URLs must use Kaggle hosts without embedded URL credentials.
+- HTTPS download URLs are enforced before credentials are posted, and live download URLs must use Kaggle hosts without explicit ports or embedded URL credentials.
 - File-loaded and supplied credentials are normalized before any request is posted, and blank credentials are rejected.
 - Live download filenames must match the checked-in DSTL archive list.
 - Zip extraction rejects path traversal, symlink or special-file members, and

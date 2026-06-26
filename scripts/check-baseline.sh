@@ -6,6 +6,8 @@ PYTHON=${PYTHON:-python3}
 CHECK_PLAN="$ROOT_DIR/docs/plans/2026-06-08-dstl-check-wrapper.md"
 HTTPS_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-https-download-guard.md"
 HOST_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md"
+EXPLICIT_PORT_DESIGN="$ROOT_DIR/docs/plans/2026-06-25-dstl-kaggle-explicit-port-design.md"
+EXPLICIT_PORT_PLAN="$ROOT_DIR/docs/plans/2026-06-25-dstl-kaggle-explicit-port.md"
 ARCHIVE_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-archive-allowlist.md"
 SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-zip-symlink-guard.md"
 DIRECT_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-direct-credential-validation.md"
@@ -60,6 +62,8 @@ for path in \
   "docs/plans/2026-06-09-dstl-timeout-validation.md" \
   "docs/plans/2026-06-09-dstl-url-credential-guard.md" \
   "docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md" \
+  "docs/plans/2026-06-25-dstl-kaggle-explicit-port-design.md" \
+  "docs/plans/2026-06-25-dstl-kaggle-explicit-port.md" \
   "docs/plans/2026-06-09-dstl-https-download-guard.md" \
   "docs/plans/2026-06-09-dstl-zip-symlink-guard.md" \
   "docs/plans/2026-06-10-dstl-resource-and-ci-limits.md" \
@@ -418,6 +422,13 @@ if ! grep -Fq "ALLOWED_DOWNLOAD_HOSTS" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "parsed_url.hostname" "$ROOT_DIR/utils.py" ||
   ! grep -Fq "test_download_rejects_non_kaggle_host_before_credentials" "$ROOT_DIR/tests/testutils.py"; then
   printf '%s\n' "Downloader must reject non-Kaggle hosts before posting credentials." >&2
+  exit 1
+fi
+
+if ! grep -Fq "parsed_url.port is not None" "$ROOT_DIR/utils.py" ||
+  ! grep -Fq "test_download_rejects_explicit_port_before_credentials" "$ROOT_DIR/tests/testutils.py" ||
+  ! grep -Fq "for port in (443, 444)" "$ROOT_DIR/tests/testutils.py"; then
+  printf '%s\n' "Downloader must reject every explicit port before loading or posting credentials." >&2
   exit 1
 fi
 
@@ -931,6 +942,23 @@ fi
 
 if ! grep -Fq "Kaggle hosts" "$ROOT_DIR/README.md"; then
   printf '%s\n' "README must document Kaggle host enforcement." >&2
+  exit 1
+fi
+
+for port_document in "$ROOT_DIR/README.md" "$ROOT_DIR/SECURITY.md" "$ROOT_DIR/AGENTS.md"; do
+  if ! grep -Fq "explicit ports" "$port_document"; then
+    printf '%s\n' "$port_document must document explicit-port rejection." >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fq "without explicit ports" "$ROOT_DIR/VISION.md" ||
+  ! grep -Fq "## Status: Accepted" "$EXPLICIT_PORT_DESIGN" ||
+  ! grep -Fq "## Status: Completed" "$EXPLICIT_PORT_PLAN" ||
+  ! grep -Fq "Three isolated hostile mutations were rejected" "$EXPLICIT_PORT_PLAN" ||
+  ! grep -Fq "28212622887" "$EXPLICIT_PORT_PLAN" ||
+  ! grep -Fq "28212621806" "$EXPLICIT_PORT_PLAN"; then
+  printf '%s\n' "Explicit-port design, implementation status, and vision must remain synchronized." >&2
   exit 1
 fi
 
