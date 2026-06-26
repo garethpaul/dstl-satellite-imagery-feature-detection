@@ -49,6 +49,7 @@
 - Preserve the configurable download, expanded-size, and archive-member limits
   when changing the downloader or extraction flow.
 - Ensure cached valid ZIP files remain subject to the configured download size limit.
+- Preserve cached descriptor-to-path fingerprint checks before returning a reused archive.
 - HTTPS download URLs are enforced before credentials are posted, and live download URLs must use Kaggle hosts without explicit ports or embedded URL credentials.
 - File-loaded and supplied credentials are normalized before any request is posted, and blank credentials are rejected.
 - Live download filenames must match the checked-in DSTL archive list.

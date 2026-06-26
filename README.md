@@ -58,6 +58,8 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 - Downloads default to a 25 GiB maximum, while extraction defaults to 100 GiB
   and 100,000 archive members. Callers may supply different positive integer
   limits when working with known datasets.
+- Cached ZIP reuse verifies that the returned filename still identifies the
+  same regular file validated through the no-follow descriptor.
 - Cached downloads are reused only when the destination is a regular
   non-symlink file containing a non-empty ZIP archive. Newly streamed bodies
   receive the same validation before atomic promotion, and partial downloads

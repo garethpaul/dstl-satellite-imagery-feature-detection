@@ -432,6 +432,42 @@ class DatasetLoadTest(unittest.TestCase):
             self.assertTrue(os.path.exists(os.path.join(moved_dir, "sample_submission.csv.zip")))
             self.assertFalse(os.path.exists(os.path.join(outside_dir, "sample_submission.csv.zip")))
 
+    def test_download_rejects_replaced_cached_file_during_validation(self):
+        payload = zip_payload(b"cached")
+        replacement = zip_payload(b"replacement")
+        session = FakeSession(FakeResponse())
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+            replacement_path = os.path.join(tmpdir, "replacement.zip")
+            with open(filepath, "wb") as handle:
+                handle.write(payload)
+            with open(replacement_path, "wb") as handle:
+                handle.write(replacement)
+
+            original_validate = utils.require_valid_zip_file
+
+            def replace_cache_after_validation(source):
+                original_validate(source)
+                os.replace(replacement_path, filepath)
+
+            utils.require_valid_zip_file = replace_cache_after_validation
+            try:
+                with self.assertRaisesRegex(ValueError, "replaced cached download"):
+                    utils.download_url(
+                        kaggle_url(),
+                        output_dir=tmpdir,
+                        session=session,
+                        credentials_file=os.path.join(tmpdir, "missing.ini"),
+                    )
+            finally:
+                utils.require_valid_zip_file = original_validate
+
+            with open(filepath, "rb") as handle:
+                self.assertEqual(replacement, handle.read())
+
+        self.assertEqual([], session.calls)
+
     def test_download_rejects_invalid_streamed_zip_and_removes_partial_file(self):
         response = FakeResponse([b"<html>login required</html>"])
         session = FakeSession(response)

@@ -10,6 +10,8 @@ EXPLICIT_PORT_DESIGN="$ROOT_DIR/docs/plans/2026-06-25-dstl-kaggle-explicit-port-
 EXPLICIT_PORT_PLAN="$ROOT_DIR/docs/plans/2026-06-25-dstl-kaggle-explicit-port.md"
 CACHED_SIZE_DESIGN="$ROOT_DIR/docs/plans/2026-06-26-dstl-cached-download-size-design.md"
 CACHED_SIZE_PLAN="$ROOT_DIR/docs/plans/2026-06-26-dstl-cached-download-size.md"
+CACHED_IDENTITY_DESIGN="$ROOT_DIR/docs/plans/2026-06-26-dstl-cached-download-identity-design.md"
+CACHED_IDENTITY_PLAN="$ROOT_DIR/docs/plans/2026-06-26-dstl-cached-download-identity.md"
 ARCHIVE_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-archive-allowlist.md"
 SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-zip-symlink-guard.md"
 DIRECT_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-direct-credential-validation.md"
@@ -68,6 +70,8 @@ for path in \
   "docs/plans/2026-06-25-dstl-kaggle-explicit-port.md" \
   "docs/plans/2026-06-26-dstl-cached-download-size-design.md" \
   "docs/plans/2026-06-26-dstl-cached-download-size.md" \
+  "docs/plans/2026-06-26-dstl-cached-download-identity-design.md" \
+  "docs/plans/2026-06-26-dstl-cached-download-identity.md" \
   "docs/plans/2026-06-09-dstl-https-download-guard.md" \
   "docs/plans/2026-06-09-dstl-zip-symlink-guard.md" \
   "docs/plans/2026-06-10-dstl-resource-and-ci-limits.md" \
@@ -114,6 +118,45 @@ for cached_size_plan_contract in \
   'descriptor-based check'; do
   if ! grep -Fq "$cached_size_plan_contract" "$CACHED_SIZE_DESIGN"; then
     printf '%s\n' "Cached download size design contract is missing: $cached_size_plan_contract" >&2
+    exit 1
+  fi
+done
+
+for cached_identity_contract in \
+  'cached_fingerprint = file_fingerprint(os.fstat(handle.fileno()))' \
+  '"cached download"' \
+  'test_download_rejects_replaced_cached_file_during_validation'; do
+  if ! grep -Fq "$cached_identity_contract" "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"; then
+    printf '%s\n' "Cached download identity contract is missing: $cached_identity_contract" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fq 'same regular file validated through the no-follow descriptor' "$ROOT_DIR/README.md" || \
+  ! grep -Fq 'bind the validated descriptor fingerprint to the returned' "$ROOT_DIR/SECURITY.md" || \
+  ! grep -Fq 'Bind cached archive validation to the final no-follow pathname fingerprint' "$ROOT_DIR/VISION.md" || \
+  ! grep -Fq 'Preserve cached descriptor-to-path fingerprint checks' "$AGENTS"; then
+  printf '%s\n' "Project guidance must document cached descriptor-to-path identity binding." >&2
+  exit 1
+fi
+
+for cached_identity_plan_contract in \
+  'status: approved' \
+  'Capture device, inode, change time, and size'; do
+  if ! grep -Fq "$cached_identity_plan_contract" "$CACHED_IDENTITY_DESIGN"; then
+    printf '%s\n' "Cached download identity design contract is missing: $cached_identity_plan_contract" >&2
+    exit 1
+  fi
+done
+
+for cached_identity_plan_contract in \
+  'status: completed' \
+  'Add a failing cached-file replacement regression' \
+  'Two isolated hostile mutations were rejected' \
+  '56 offline tests' \
+  'no known dependency vulnerabilities'; do
+  if ! grep -Fq "$cached_identity_plan_contract" "$CACHED_IDENTITY_PLAN"; then
+    printf '%s\n' "Cached download identity plan evidence is missing: $cached_identity_plan_contract" >&2
     exit 1
   fi
 done
