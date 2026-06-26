@@ -38,9 +38,9 @@ For web services, APIs, sockets, or scraping workflows, prioritize reports invol
 
 Live DSTL downloads must stay restricted to HTTPS Kaggle hosts and filenames in
 the checked-in DSTL archive filename list before Kaggle credentials are loaded
-or posted. Download URLs with embedded URL credentials are rejected before local
-Kaggle credentials are loaded. Download requests must use a positive finite timeout
-value or `(connect, read)` pair before requests are posted.
+or posted. Download URLs with explicit ports or embedded URL credentials are
+rejected before local Kaggle credentials are loaded. Download requests must use
+a positive finite timeout value or `(connect, read)` pair before requests are posted.
 Supplied Kaggle credentials are normalized and rejected when blank before requests
 are posted. Zip extraction preflights every member before writing files and
 rejects path traversal, archive symlink members and special-file members,

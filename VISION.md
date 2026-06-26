@@ -26,9 +26,9 @@ Priority:
 Current baseline:
 
 - `download_url` uses explicit `(connect, read)` timeouts, checks HTTP status,
-  requires HTTPS Kaggle download URLs, restricts downloads to the configured
-  DSTL archive list, validates supplied credentials, and accepts an injectable
-  client for offline tests.
+  requires HTTPS Kaggle download URLs without explicit ports, restricts
+  downloads to the configured DSTL archive list, validates supplied credentials,
+  and accepts an injectable client for offline tests.
 - Timeout values are normalized to positive finite numbers or `(connect, read)`
   pairs before live requests are posted.
 - Default tests use fake HTTP responses and temporary zip files instead of live

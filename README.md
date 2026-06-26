@@ -87,7 +87,7 @@ make build
 python3 -m py_compile utils.py tests/testutils.py
 ```
 
-`make check` runs the source baseline, Ruff formatting and lint checks, 52
+`make check` runs the source baseline, Ruff formatting and lint checks, 53
 offline unit tests, bytecode compilation, and a `pip-audit` scan of declared
 dependencies. Default tests use
 fake HTTP responses and temporary files. They do not require Kaggle
@@ -103,7 +103,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   git.
 - Downloaded `.zip` archives and extracted imagery should stay outside commits.
 - HTTPS download URLs are enforced before credentials are posted, and live
-  download URLs must use Kaggle hosts without embedded URL credentials.
+  download URLs must use Kaggle hosts without explicit ports or embedded URL
+  credentials.
 - Live downloads require a positive finite timeout value or `(connect, read)`
   timeout pair; passing `None` is rejected before a request is posted.
 - File-loaded and supplied credentials are normalized before any request is
