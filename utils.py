@@ -205,7 +205,14 @@ def download_url(
                 if os.fstat(handle.fileno()).st_size > max_download_bytes:
                     raise ValueError("Download exceeds the configured size limit.")
                 require_valid_zip_file(handle)
+                cached_fingerprint = file_fingerprint(os.fstat(handle.fileno()))
             require_download_root_identity(output_root, root_fd)
+            require_file_fingerprint(
+                root_fd,
+                filename,
+                cached_fingerprint,
+                "cached download",
+            )
             logging.warning("File %s exists", filepath)
             return filepath
 
@@ -465,16 +472,21 @@ def unlink_if_fingerprint_matches(root_fd, filename, expected_fingerprint):
     return True
 
 
-def require_file_fingerprint(root_fd, filename, expected_fingerprint):
+def require_file_fingerprint(
+    root_fd,
+    filename,
+    expected_fingerprint,
+    description="published download",
+):
     try:
         current_stat = os.stat(filename, dir_fd=root_fd, follow_symlinks=False)
     except OSError as exc:
-        raise ValueError("Refusing to return a replaced published download.") from exc
+        raise ValueError(f"Refusing to return a replaced {description}.") from exc
     if (
         not stat.S_ISREG(current_stat.st_mode)
         or file_fingerprint(current_stat) != expected_fingerprint
     ):
-        raise ValueError("Refusing to return a replaced published download.")
+        raise ValueError(f"Refusing to return a replaced {description}.")
     return current_stat
 
 

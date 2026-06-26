@@ -1,5 +1,70 @@
 # Changes
 
+## 2026-06-26 14:30 UTC - P1 - Bind cached validation to returned file identity
+
+### Summary
+
+Closed a cache reuse race where `download_url` could validate one ZIP through a
+no-follow descriptor but return the pathname of a different file installed
+during validation.
+
+### Work completed
+
+- Captured the validated cache descriptor's device, inode, change time, and size.
+- Required the cached pathname to remain the same regular file after output-root
+  identity verification and before reuse is logged or returned.
+- Preserved raced replacement data instead of deleting a file not owned by the
+  downloader invocation.
+- Added a focused offline regression plus source, documentation, design, and
+  implementation contracts.
+
+### Threads
+
+- Started: None — completed directly because the descriptor-to-path gap and fix
+  are narrow.
+- Continued: Cached download safety hardening from PR #21.
+- Stopped: None.
+
+### Files changed
+
+- `utils.py` — binds validated cached descriptors to returned path fingerprints.
+- `tests/testutils.py` — covers replacement after successful ZIP validation.
+- `scripts/check-baseline.sh` — preserves the new source, test, plan, and
+  documentation contracts.
+- `README.md`, `SECURITY.md`, `VISION.md`, and `AGENTS.md` — document the cached
+  identity boundary.
+- `docs/plans/2026-06-26-dstl-cached-download-identity-design.md` and
+  `docs/plans/2026-06-26-dstl-cached-download-identity.md` — record the decision
+  and implementation evidence.
+
+### Validation
+
+- Focused cached replacement regression — failed before the production change
+  and passed afterward with the unowned replacement preserved.
+- Two isolated hostile mutations — rejected guard removal and deriving the
+  expected fingerprint from the replaced pathname.
+- `make check`, `make lint`, `make test`, `make build`, and `make verify` —
+  passed in the pinned isolated Python 3.11 environment.
+- Ruff format/check, 56 offline tests, bytecode compilation, and pip-audit —
+  passed; no known dependency vulnerabilities were reported.
+- Hosted Check run `28244664879` — passed on Python 3.10, 3.12, and 3.14.
+- CodeQL run `28244662609` — passed Actions and Python analysis.
+- Codex review helper — blocked by repeated HTTP 401 authentication failures;
+  immutable exact-head manual review found no actionable findings.
+
+### Bugs / findings
+
+- P1: cache validation was descriptor-safe, but the returned pathname was not
+  required to identify the same file.
+
+### Blockers
+
+- Live Kaggle integration remains intentionally outside the offline default gate.
+
+### Next action
+
+- Merge PR #22 after the final documentation-only head passes hosted checks.
+
 ## 2026-06-26 13:51 UTC - P2 - Enforce cached download size limits
 
 ### Summary

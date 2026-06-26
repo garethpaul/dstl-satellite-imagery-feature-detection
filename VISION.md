@@ -42,6 +42,7 @@ Current baseline:
   parent traversal, and same-directory atomic file publication.
 - Bind download publication to a descriptor-verified output root.
 - Enforce cached archive size through the opened file descriptor before reuse.
+- Bind cached archive validation to the final no-follow pathname fingerprint.
 - Publish validated downloads without clobbering raced destinations.
 - Per-attempt secret-suffixed partial names isolate concurrent downloads while
   no-clobber publication permits only one final winner.
