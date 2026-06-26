@@ -18,4 +18,9 @@ status: completed
 - `make check`, `make lint`, `make test`, `make build`, and `make verify` passed
   in the pinned isolated Python 3.11 environment with Ruff, bytecode compilation,
   and no known dependency vulnerabilities.
-- Hosted CI and exact-head review are pending.
+- GitHub Actions Check run `28244664879` passed on Python 3.10, 3.12,
+  and 3.14.
+- CodeQL run `28244662609` passed Actions and Python analysis.
+- The Codex review helper was attempted and blocked by repeated HTTP 401
+  authentication failures; immutable exact-head manual review found no
+  actionable findings.

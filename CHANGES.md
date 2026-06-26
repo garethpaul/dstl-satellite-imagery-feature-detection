@@ -47,7 +47,10 @@ during validation.
   passed in the pinned isolated Python 3.11 environment.
 - Ruff format/check, 56 offline tests, bytecode compilation, and pip-audit —
   passed; no known dependency vulnerabilities were reported.
-- Hosted CI and exact-head review — pending.
+- Hosted Check run `28244664879` — passed on Python 3.10, 3.12, and 3.14.
+- CodeQL run `28244662609` — passed Actions and Python analysis.
+- Codex review helper — blocked by repeated HTTP 401 authentication failures;
+  immutable exact-head manual review found no actionable findings.
 
 ### Bugs / findings
 
@@ -60,8 +63,7 @@ during validation.
 
 ### Next action
 
-- Complete local verification and hostile mutation testing, then open a pull
-  request for hosted checks and exact-head review.
+- Merge PR #22 after the final documentation-only head passes hosted checks.
 
 ## 2026-06-26 13:51 UTC - P2 - Enforce cached download size limits
 
