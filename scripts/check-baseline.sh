@@ -8,6 +8,8 @@ HTTPS_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-https-download-guard.md"
 HOST_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md"
 EXPLICIT_PORT_DESIGN="$ROOT_DIR/docs/plans/2026-06-25-dstl-kaggle-explicit-port-design.md"
 EXPLICIT_PORT_PLAN="$ROOT_DIR/docs/plans/2026-06-25-dstl-kaggle-explicit-port.md"
+CACHED_SIZE_DESIGN="$ROOT_DIR/docs/plans/2026-06-26-dstl-cached-download-size-design.md"
+CACHED_SIZE_PLAN="$ROOT_DIR/docs/plans/2026-06-26-dstl-cached-download-size.md"
 ARCHIVE_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-archive-allowlist.md"
 SYMLINK_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-zip-symlink-guard.md"
 DIRECT_CREDENTIAL_PLAN="$ROOT_DIR/docs/plans/2026-06-09-dstl-direct-credential-validation.md"
@@ -64,6 +66,8 @@ for path in \
   "docs/plans/2026-06-09-dstl-kaggle-host-download-guard.md" \
   "docs/plans/2026-06-25-dstl-kaggle-explicit-port-design.md" \
   "docs/plans/2026-06-25-dstl-kaggle-explicit-port.md" \
+  "docs/plans/2026-06-26-dstl-cached-download-size-design.md" \
+  "docs/plans/2026-06-26-dstl-cached-download-size.md" \
   "docs/plans/2026-06-09-dstl-https-download-guard.md" \
   "docs/plans/2026-06-09-dstl-zip-symlink-guard.md" \
   "docs/plans/2026-06-10-dstl-resource-and-ci-limits.md" \
@@ -85,6 +89,45 @@ for path in \
   "docs/plans/2026-06-18-ruff-patch-refresh.md" \
   "docs/bugs/p2-python-http-call-without-timeout-3955c83cfecd63ea.md"; do
   require_file "$path"
+done
+
+for cached_size_contract in \
+  'os.fstat(handle.fileno()).st_size > max_download_bytes' \
+  'test_download_rejects_cached_zip_over_limit_before_credentials' \
+  'test_download_accepts_cached_zip_at_exact_limit'; do
+  if ! grep -Fq "$cached_size_contract" "$ROOT_DIR/utils.py" "$ROOT_DIR/tests/testutils.py"; then
+    printf '%s\n' "Cached download size contract is missing: $cached_size_contract" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fq 'Cached valid ZIP files larger than the configured download limit' "$ROOT_DIR/README.md" || \
+  ! grep -Fq 'Cached valid ZIP files remain subject to the configured download size limit' "$ROOT_DIR/SECURITY.md" || \
+  ! grep -Fq 'cached archive size through the opened file descriptor' "$ROOT_DIR/VISION.md" || \
+  ! grep -Fq 'cached valid ZIP files remain subject to the configured download size limit' "$AGENTS"; then
+  printf '%s\n' "Project guidance must document the cached download size boundary." >&2
+  exit 1
+fi
+
+for cached_size_plan_contract in \
+  'status: approved' \
+  'descriptor-based check'; do
+  if ! grep -Fq "$cached_size_plan_contract" "$CACHED_SIZE_DESIGN"; then
+    printf '%s\n' "Cached download size design contract is missing: $cached_size_plan_contract" >&2
+    exit 1
+  fi
+done
+
+for cached_size_plan_contract in \
+  'status: completed' \
+  '## Verification completed' \
+  'Two isolated hostile mutations were rejected' \
+  '55 offline tests' \
+  'no known dependency vulnerabilities'; do
+  if ! grep -Fq "$cached_size_plan_contract" "$CACHED_SIZE_PLAN"; then
+    printf '%s\n' "Cached download size plan evidence is missing: $cached_size_plan_contract" >&2
+    exit 1
+  fi
 done
 
 for dataset_contract in \

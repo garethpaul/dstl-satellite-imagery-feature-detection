@@ -1,5 +1,68 @@
 # Changes
 
+## 2026-06-26 13:51 UTC - P2 - Enforce cached download size limits
+
+### Summary
+
+Closed a resource-limit bypass where a valid cached DSTL ZIP larger than
+`max_download_bytes` was reused even though the same payload would be rejected
+when downloaded.
+
+### Work completed
+
+- Measured cached archive size through the already opened no-follow descriptor.
+- Rejected oversized cached ZIPs before credential loading or network dispatch.
+- Preserved the cached file unchanged and accepted the exact configured limit.
+- Added focused offline regressions, static contracts, and hostile mutation
+  verification.
+
+### Threads
+
+- Started: None — completed directly because the boundary and fix are narrow.
+- Continued: None.
+- Stopped: None.
+
+### Files changed
+
+- `utils.py` — enforces `max_download_bytes` on cached descriptors.
+- `tests/testutils.py` — covers oversized rejection and exact-limit acceptance.
+- `scripts/check-baseline.sh` — preserves source, test, plan, and documentation
+  contracts.
+- `README.md`, `SECURITY.md`, `VISION.md`, and `AGENTS.md` — document the cache
+  resource boundary.
+- `docs/plans/2026-06-26-dstl-cached-download-size-design.md` and
+  `docs/plans/2026-06-26-dstl-cached-download-size.md` — record the decision and
+  implementation steps.
+
+### Validation
+
+- Focused oversized and exact-limit cached-size regressions — passed.
+- Two isolated hostile mutations — rejected guard removal and an off-by-one
+  `>=` boundary.
+- `make check`, `make lint`, `make test`, `make build`, and `make verify` —
+  passed in the pinned isolated Python 3.11 environment.
+- Ruff format/check, 55 offline tests, bytecode compilation, and pip-audit —
+  passed; no known dependency vulnerabilities were reported.
+- Hosted Check run `28242505722` — passed on Python 3.10, 3.12, and 3.14.
+- CodeQL run `28242503647` — passed Actions and Python analysis.
+- `git diff --check` — passed.
+- Codex review helper — blocked by repeated HTTP 401 authentication failures;
+  exact-head manual review found no actionable findings.
+
+### Bugs / findings
+
+- P2: caller-configured download limits applied only to response bytes, allowing
+  an oversized local cache entry to bypass the same resource policy.
+
+### Blockers
+
+- None for the patch. Live Kaggle integration remains intentionally out of the
+  offline default gate, and local Codex API authentication remains unavailable.
+
+### Next action
+
+- Merge PR #21 after the final documentation-only head passes hosted checks.
+
 ## 2026-06-25 19:10 PDT - P1 - Reject explicit Kaggle download ports
 
 ### Summary

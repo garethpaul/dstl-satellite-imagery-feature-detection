@@ -41,6 +41,7 @@ Current baseline:
 - Close destination path races with descriptor-rooted extraction, no-follow
   parent traversal, and same-directory atomic file publication.
 - Bind download publication to a descriptor-verified output root.
+- Enforce cached archive size through the opened file descriptor before reuse.
 - Publish validated downloads without clobbering raced destinations.
 - Per-attempt secret-suffixed partial names isolate concurrent downloads while
   no-clobber publication permits only one final winner.

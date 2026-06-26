@@ -349,6 +349,51 @@ class DatasetLoadTest(unittest.TestCase):
 
         self.assertEqual([], session.calls)
 
+    def test_download_rejects_cached_zip_over_limit_before_credentials(self):
+        payload = zip_payload(b"cached")
+        response = FakeResponse()
+        session = FakeSession(response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+            with open(filepath, "wb") as handle:
+                handle.write(payload)
+
+            with self.assertRaisesRegex(ValueError, "size limit"):
+                utils.download_url(
+                    kaggle_url(),
+                    output_dir=tmpdir,
+                    session=session,
+                    credentials_file=os.path.join(tmpdir, "missing.ini"),
+                    max_download_bytes=len(payload) - 1,
+                )
+
+            with open(filepath, "rb") as handle:
+                self.assertEqual(payload, handle.read())
+
+        self.assertEqual([], session.calls)
+
+    def test_download_accepts_cached_zip_at_exact_limit(self):
+        payload = zip_payload(b"cached")
+        session = FakeSession(FakeResponse())
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "sample_submission.csv.zip")
+            with open(filepath, "wb") as handle:
+                handle.write(payload)
+
+            result = utils.download_url(
+                kaggle_url(),
+                output_dir=tmpdir,
+                session=session,
+                credentials_file=os.path.join(tmpdir, "missing.ini"),
+                max_download_bytes=len(payload),
+            )
+
+            self.assertEqual(filepath, result)
+
+        self.assertEqual([], session.calls)
+
     def test_download_rejects_replaced_output_root_during_cache_validation(self):
         payload = zip_payload(b"cached")
         response = FakeResponse()

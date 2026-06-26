@@ -202,6 +202,8 @@ def download_url(
         cached_fd = open_cached_download(root_fd, filename)
         if cached_fd is not None:
             with os.fdopen(cached_fd, "rb") as handle:
+                if os.fstat(handle.fileno()).st_size > max_download_bytes:
+                    raise ValueError("Download exceeds the configured size limit.")
                 require_valid_zip_file(handle)
             require_download_root_identity(output_root, root_fd)
             logging.warning("File %s exists", filepath)
