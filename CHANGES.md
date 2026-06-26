@@ -46,7 +46,11 @@ now accepts only the default HTTPS authority used by the checked-in endpoint.
 - Three isolated hostile guard mutations — rejected removal, allowing `:443`,
   and rejecting only `:444`.
 - `git diff --check` — passed.
-- Hosted Python 3.10, 3.12, and 3.14 validation — pending.
+- Hosted Check run `28212622887` — passed on Python 3.10, 3.12, and 3.14.
+- CodeQL run `28212621806` — passed for actions and Python analysis.
+- Codex review helper with `codex review --base origin/master` — blocked by
+  local OpenAI API authentication (HTTP 401); exact-head manual review found no
+  actionable findings.
 
 ### Bugs / findings
 
@@ -55,12 +59,12 @@ now accepts only the default HTTPS authority used by the checked-in endpoint.
 
 ### Blockers
 
-- None.
+- None for the patch. Local Codex API authentication remains unavailable, with
+  exact-head manual review used instead.
 
 ### Next action
 
-- Commit and open the focused PR, run exact-head review, and merge only after
-  the hosted Python matrix passes.
+- Merge PR #20 after the final documentation-only head passes hosted checks.
 
 ## 2026-06-19
 

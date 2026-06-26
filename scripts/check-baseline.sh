@@ -954,7 +954,10 @@ done
 
 if ! grep -Fq "without explicit ports" "$ROOT_DIR/VISION.md" ||
   ! grep -Fq "## Status: Accepted" "$EXPLICIT_PORT_DESIGN" ||
-  ! grep -Fq "## Status: In Progress" "$EXPLICIT_PORT_PLAN"; then
+  ! grep -Fq "## Status: Completed" "$EXPLICIT_PORT_PLAN" ||
+  ! grep -Fq "Three isolated hostile mutations were rejected" "$EXPLICIT_PORT_PLAN" ||
+  ! grep -Fq "28212622887" "$EXPLICIT_PORT_PLAN" ||
+  ! grep -Fq "28212621806" "$EXPLICIT_PORT_PLAN"; then
   printf '%s\n' "Explicit-port design, implementation status, and vision must remain synchronized." >&2
   exit 1
 fi
