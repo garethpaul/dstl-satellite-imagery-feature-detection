@@ -128,6 +128,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   files use exclusive creation and are removed when a stream, payload check, or
   path race fails. Cached and newly downloaded files must be non-empty ZIP
   archives, preventing HTML login/error bodies from becoming reusable data.
+- Cached valid ZIP files larger than the configured download limit are rejected
+  through their already opened descriptors before credentials or network calls.
 - Downloads hold a descriptor-verified output root across cache validation,
   partial writes, cleanup, and atomic publication so root symlinks or
   replacement races cannot redirect archive bytes.

@@ -1,5 +1,58 @@
 # Changes
 
+## 2026-06-26 13:51 UTC - P2 - Enforce cached download size limits
+
+### Summary
+
+Closed a resource-limit bypass where a valid cached DSTL ZIP larger than
+`max_download_bytes` was reused even though the same payload would be rejected
+when downloaded.
+
+### Work completed
+
+- Measured cached archive size through the already opened no-follow descriptor.
+- Rejected oversized cached ZIPs before credential loading or network dispatch.
+- Preserved the cached file unchanged and accepted the exact configured limit.
+- Added focused offline regressions, static contracts, and hostile mutation
+  verification.
+
+### Threads
+
+- Started: None — completed directly because the boundary and fix are narrow.
+- Continued: None.
+- Stopped: None.
+
+### Files changed
+
+- `utils.py` — enforces `max_download_bytes` on cached descriptors.
+- `tests/testutils.py` — covers oversized rejection and exact-limit acceptance.
+- `scripts/check-baseline.sh` — preserves source, test, plan, and documentation
+  contracts.
+- `README.md`, `SECURITY.md`, `VISION.md`, and `AGENTS.md` — document the cache
+  resource boundary.
+- `docs/plans/2026-06-26-dstl-cached-download-size-design.md` and
+  `docs/plans/2026-06-26-dstl-cached-download-size.md` — record the decision and
+  implementation steps.
+
+### Validation
+
+- Focused cached-size regressions — pending.
+- Full pinned verification and hosted CI — pending.
+
+### Bugs / findings
+
+- P2: caller-configured download limits applied only to response bytes, allowing
+  an oversized local cache entry to bypass the same resource policy.
+
+### Blockers
+
+- None for the patch; live Kaggle integration remains intentionally out of the
+  offline default gate.
+
+### Next action
+
+- Run focused mutations and the full pinned verification matrix.
+
 ## 2026-06-25 19:10 PDT - P1 - Reject explicit Kaggle download ports
 
 ### Summary
