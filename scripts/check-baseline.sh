@@ -307,6 +307,11 @@ if ! grep -Fq "Status: Completed" "$DOWNLOAD_PATH_PLAN" ||
   exit 1
 fi
 
+# The make_contract pins below are substring greps: they stay satisfied when a
+# recipe is neutered by an appended `|| true` or a prefixed `-`. Check the
+# Makefile for those before trusting any of them.
+"$ROOT_DIR/scripts/check-make-integrity.sh"
+
 for make_contract in \
   'override ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))' \
   'PYTHON="$(PYTHON)" "$(ROOT)/scripts/check-baseline.sh"' \
