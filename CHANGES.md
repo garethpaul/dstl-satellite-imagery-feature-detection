@@ -1,5 +1,33 @@
 # Changes
 
+## 2026-07-18 - P1 - Verify the test suite still detects defects
+
+### Summary
+
+Added `make mutation-guard`, which plants real defects into a scratch copy of the
+tree and fails if the offline suite still passes, and
+`scripts/check-make-integrity.sh`, which rejects Makefile recipes neutered by an
+appended `|| true` or a prefixed `-`.
+
+Before this change every verification step read a *representation* of the code: a
+substring grep, a pinned test name, a pinned assertion source line, or a
+documented claim that mutations had been rejected. None observed whether the
+suite still detected anything. Overriding the `assert*` methods on
+`DatasetLoadTest` left all 56 tests reporting `OK`, left every pinned assertion
+source line byte-identical, and `make verify` exited 0.
+
+### Work completed
+
+- `scripts/mutation-guard.sh`: scratch-copy the tree, require a clean green
+  baseline, then plant six real defects and require the suite to reject each one.
+  Anchor hit counts are asserted, so a mutation that fails to apply is reported as
+  an invalid probe rather than silently passing on a clean tree.
+- `scripts/check-make-integrity.sh`: invoked from both `check-baseline.sh` and
+  `mutation-guard.sh` so neutering either recipe leaves the other able to report
+  it. Reads the Makefile text, because `make --dry-run` strips `-` and `@`.
+- `mutation-guard::` is a double-colon rule: its recipe cannot be replaced by a
+  later single-colon redefinition.
+
 ## 2026-06-26 14:30 UTC - P1 - Bind cached validation to returned file identity
 
 ### Summary

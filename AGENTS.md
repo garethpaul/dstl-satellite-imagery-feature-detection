@@ -22,6 +22,10 @@
 - Lint/static checks: `make lint`
 - Tests: `make test`
 - Build: `make build`
+- Behavioural test-suite guard: `make mutation-guard` - copies the tree to a scratch
+  directory, plants real defects in the copy, and fails if the offline suite still
+  passes. A suite that cannot detect a removed guard is not a suite, and no
+  substring pin can tell the difference.
 - If a command above skips because a platform toolchain is missing, verify on a machine with that SDK before claiming platform behavior is tested.
 
 ## Coding conventions
